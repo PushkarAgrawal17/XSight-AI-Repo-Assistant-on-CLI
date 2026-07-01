@@ -38,13 +38,15 @@ def scan(repo_path: Path) -> ScanResult:
     ignored_directories = 0
     skipped_binary_files = 0
     skipped_large_files = 0
+    errors = 0
 
     for dirpath, dirnames, filenames in os.walk(resolved_path):
+        dirnames.sort()
         pruned = [d for d in dirnames if d in ignored_dirs]
         ignored_directories += len(pruned)
         dirnames[:] = [d for d in dirnames if d not in ignored_dirs]
 
-        for filename in filenames:
+        for filename in sorted(filenames):
             file_path = Path(dirpath) / filename
 
             if _matches_any_pattern(filename, ignored_patterns):
@@ -55,14 +57,24 @@ def scan(repo_path: Path) -> ScanResult:
                 skipped_binary_files += 1
                 continue
 
-            file_size = file_path.stat().st_size
-            if file_size > MAX_FILE_SIZE_BYTES:
+            try:
+                file_stat = file_path.stat()
+            except OSError:
+                errors += 1
+                continue
+
+            if file_stat.st_size > MAX_FILE_SIZE_BYTES:
                 skipped_large_files += 1
                 continue
 
-            scanned_file = _build_scanned_file(
-                file_path, resolved_path, file_size
-            )
+            try:
+                scanned_file = _build_scanned_file(
+                    file_path, resolved_path, file_stat
+                )
+            except OSError:
+                errors += 1
+                continue
+
             files.append(scanned_file)
 
     snapshot = RepositorySnapshot(
@@ -75,24 +87,25 @@ def scan(repo_path: Path) -> ScanResult:
         ignored_directories=ignored_directories,
         skipped_binary_files=skipped_binary_files,
         skipped_large_files=skipped_large_files,
+        errors=errors,
     )
     return ScanResult(snapshot=snapshot, summary=summary)
 
 
 def _build_scanned_file(
-    file_path: Path, repo_root: Path, size_bytes: int
+    file_path: Path, repo_root: Path, file_stat: os.stat_result
 ) -> ScannedFile:
     """Build a ScannedFile for a file that passed all ignore checks."""
     content_hash = _hash_file(file_path)
     last_modified = datetime.fromtimestamp(
-        file_path.stat().st_mtime, tz=timezone.utc
+        file_stat.st_mtime, tz=timezone.utc
     ).isoformat()
 
     return ScannedFile(
-        relative_path=str(file_path.relative_to(repo_root)),
+        relative_path=file_path.relative_to(repo_root).as_posix(),
         language=detect_language(file_path.name),
         content_hash=content_hash,
-        size_bytes=size_bytes,
+        size_bytes=file_stat.st_size,
         last_modified=last_modified,
     )
 
@@ -122,7 +135,12 @@ def _load_ignore_rules(repo_root: Path) -> tuple[set[str], set[str]]:
     if not ignore_file.is_file():
         return ignored_dirs, ignored_patterns
 
-    for raw_line in ignore_file.read_text().splitlines():
+    try:
+        content = ignore_file.read_text(encoding="utf-8")
+    except OSError:
+        return ignored_dirs, ignored_patterns
+
+    for raw_line in content.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue

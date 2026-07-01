@@ -13,5 +13,10 @@ app = typer.Typer(
 app.command(name="init")(init_command.run)
 
 
+@app.callback()
+def main() -> None:
+    """XSight — Agentic AI-powered Code Intelligence System using Graph RAG."""
+
+
 if __name__ == "__main__":
     app()

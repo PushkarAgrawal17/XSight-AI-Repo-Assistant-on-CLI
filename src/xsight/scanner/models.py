@@ -30,6 +30,7 @@ class ScanSummary:
     ignored_directories: int
     skipped_binary_files: int
     skipped_large_files: int
+    errors: int
 
 
 @dataclass
