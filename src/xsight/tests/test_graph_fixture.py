@@ -62,6 +62,13 @@ def main() -> None:
     # module -> method should NOT exist (method belongs to class, not module)
     assert not graph.has_edge("module_a.py", "module_a.py::Derived.method")
 
+    # every function node must have exactly one contains-owner
+    for node_id, data in graph.nodes(data=True):
+        if data["kind"] != "function":
+            continue
+        owners = [u for u, _, d in graph.in_edges(node_id, data=True) if d["type"] == "contains"]
+        assert len(owners) == 1, f"{node_id} has {len(owners)} contains-owners: {owners}"
+
     # ---- inherits edges ----
     assert has_edge_of_type("module_a.py::Derived", "module_a.py::Base", "inherits")
 
