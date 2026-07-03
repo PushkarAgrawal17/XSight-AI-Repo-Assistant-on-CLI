@@ -16,5 +16,9 @@ class Settings(BaseSettings):
 
     db_path: Path = Path.home() / ".xsight" / "xsight.db"
 
+    ollama_base_url: str = "http://localhost:11434"
+    embedding_model: str = "nomic-embed-text"
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "xsight_chunks"
 
 settings = Settings()
