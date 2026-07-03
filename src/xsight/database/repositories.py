@@ -26,3 +26,13 @@ def get_or_create_repository(path: Path, conn: sqlite3.Connection) -> int:
     )
     conn.commit()
     return cursor.lastrowid
+
+def get_repository(path: Path, conn: sqlite3.Connection) -> int | None:
+    resolved_path = str(path.expanduser().resolve())
+
+    row = conn.execute(
+        "SELECT id FROM repositories WHERE path = ?",
+        (resolved_path,),
+    ).fetchone()
+
+    return row["id"] if row is not None else None

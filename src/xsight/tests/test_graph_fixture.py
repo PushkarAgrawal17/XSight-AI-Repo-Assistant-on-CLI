@@ -20,7 +20,7 @@ def main() -> None:
 
     assert len(modules) == 2, f"expected 2 module nodes, got {len(modules)}"
     assert len(classes) == 3, f"expected 3 class nodes, got {len(classes)}"
-    assert len(functions) == 2, f"expected 2 function nodes, got {len(functions)}"
+    assert len(functions) == 3, f"expected 3 function nodes, got {len(functions)}"
 
     # ---- module node attributes ----
     assert graph.nodes["module_a.py"]["name"] == "module_a"

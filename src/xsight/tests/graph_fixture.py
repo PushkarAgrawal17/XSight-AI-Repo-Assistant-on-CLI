@@ -42,6 +42,14 @@ module_a = ParsedModule(
             parent_id=None,
             is_method=False,
         ),
+        ParsedFunction(
+            id="module_a.py::Derived.helper",
+            name="helper",
+            start_line=10,
+            end_line=10,
+            parent_id="module_a.py::Derived",
+            is_method=True,
+        ),
     ],
     imports=[],
 )

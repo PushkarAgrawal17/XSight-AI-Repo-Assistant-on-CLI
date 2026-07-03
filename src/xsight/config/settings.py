@@ -21,4 +21,12 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "xsight_chunks"
 
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.1-flash-lite"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
 settings = Settings()
