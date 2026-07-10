@@ -17,3 +17,5 @@ class ExpandedResult:
     parent: RelatedSymbol | None
     siblings: list[RelatedSymbol]
     base_class: RelatedSymbol | None
+    calls: list[RelatedSymbol]
+    called_by: list[RelatedSymbol]

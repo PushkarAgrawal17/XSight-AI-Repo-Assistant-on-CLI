@@ -6,6 +6,7 @@ from tree_sitter import Language, Node, Parser
 from xsight.parser.models import (
     ImportedName,
     ParsedClass,
+    ParsedCall,
     ParsedFunction,
     ParsedImport,
     ParsedModule,
@@ -113,6 +114,9 @@ def _parse_function(
     else:
         symbol_id = build_symbol_id(relative_path, name)
 
+    body_node = node.child_by_field_name("body")
+    calls = _parse_calls(body_node, source) if body_node is not None else []
+
     return ParsedFunction(
         id=symbol_id,
         name=name,
@@ -120,8 +124,8 @@ def _parse_function(
         end_line=node.end_point[0] + 1,
         parent_id=parent.id if parent is not None else None,
         is_method=parent is not None,
+        calls=calls,
     )
-
 
 def _parse_import(node: Node, source: bytes) -> list[ParsedImport]:
     line = node.start_point[0] + 1
@@ -135,12 +139,22 @@ def _parse_import(node: Node, source: bytes) -> list[ParsedImport]:
         for child in node.named_children:
             if child.type in ("dotted_name", "identifier"):
                 results.append(
-                    ParsedImport(module=_text(child, source), imported_names=[], line=line)
+                    ParsedImport(
+                        module=_text(child, source),
+                        level=0,
+                        imported_names=[],
+                        line=line,
+                    )
                 )
             elif child.type == "aliased_import":
                 name_node = child.child_by_field_name("name")
                 results.append(
-                    ParsedImport(module=_text(name_node, source), imported_names=[], line=line)
+                    ParsedImport(
+                        module=_text(name_node, source),
+                        level=0,
+                        imported_names=[],
+                        line=line,
+                    )
                 )
         return results
 
@@ -149,7 +163,18 @@ def _parse_import(node: Node, source: bytes) -> list[ParsedImport]:
     # from . import y
     # from .pkg import y
     module_node = node.child_by_field_name("module_name")
-    module = _text(module_node, source) if module_node is not None else "."
+
+    if module_node is None:
+        module = None
+        level = 1
+    else:
+        raw_module = _text(module_node, source)
+
+        level = len(raw_module) - len(raw_module.lstrip("."))
+        module = raw_module.lstrip(".")
+
+        if module == "":
+            module = None
 
     imported_names: list[ImportedName] = []
     for child in node.named_children:
@@ -164,4 +189,46 @@ def _parse_import(node: Node, source: bytes) -> list[ParsedImport]:
         elif child.type == "wildcard_import":
             imported_names.append(ImportedName(name="*", alias=None))
 
-    return [ParsedImport(module=module, imported_names=imported_names, line=line)]
+    return [ParsedImport(
+                module=module,
+                level=level,
+                imported_names=imported_names,
+                line=line,
+    )]
+
+def _parse_calls(node: Node, source: bytes) -> list[ParsedCall]:
+    """Recursively find every call expression within a function/method body.
+
+    Unlike the top-level symbol walk, this must descend arbitrarily deep
+    (calls can appear inside if/for/try/etc.), so it walks all descendants
+    rather than just named_children.
+    """
+    calls: list[ParsedCall] = []
+    for child in node.named_children:
+        if child.type == "call":
+            parsed_call = _parse_call(child, source)
+            if parsed_call is not None:
+                calls.append(parsed_call)
+        calls.extend(_parse_calls(child, source))
+    return calls
+
+
+def _parse_call(node: Node, source: bytes) -> ParsedCall | None:
+    function_node = node.child_by_field_name("function")
+    line = node.start_point[0] + 1
+
+    if function_node.type == "identifier":
+        return ParsedCall(callee_name=_text(function_node, source), receiver=None, line=line)
+
+    if function_node.type == "attribute":
+        object_node = function_node.child_by_field_name("object")
+        attribute_node = function_node.child_by_field_name("attribute")
+        return ParsedCall(
+            callee_name=_text(attribute_node, source),
+            receiver=_text(object_node, source),
+            line=line,
+        )
+
+    # function/subscript/etc. as the callee (e.g. foo()(), obj[0]()) - skip,
+    # not a name or attribute we can meaningfully resolve later.
+    return None

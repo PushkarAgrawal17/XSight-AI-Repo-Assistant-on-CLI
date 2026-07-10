@@ -29,6 +29,19 @@ def format_siblings(siblings: list[RelatedSymbol]) -> str:
     lines = [f"- {s.name} (lines {s.start_line}-{s.end_line})" for s in siblings]
     return "Sibling methods:\n" + "\n".join(lines)
 
+def format_calls(calls: list[RelatedSymbol]) -> str:
+    if not calls:
+        return ""
+    lines = [f"- {c.name} (lines {c.start_line}-{c.end_line})" for c in calls]
+    return "Calls:\n" + "\n".join(lines)
+
+
+def format_called_by(called_by: list[RelatedSymbol]) -> str:
+    if not called_by:
+        return ""
+    lines = [f"- {c.name} (lines {c.start_line}-{c.end_line})" for c in called_by]
+    return "Called by:\n" + "\n".join(lines)
+
 
 def _format_symbol_block(index: int, result: ExpandedResult) -> str:
     sections = [
@@ -38,6 +51,8 @@ def _format_symbol_block(index: int, result: ExpandedResult) -> str:
             format_parent(result.parent),
             format_base_class(result.base_class),
             format_siblings(result.siblings),
+            format_calls(result.calls),
+            format_called_by(result.called_by),
         )
         if section
     ]

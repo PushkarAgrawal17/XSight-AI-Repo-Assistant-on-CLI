@@ -53,14 +53,33 @@ def _expand_one(graph: nx.MultiDiGraph, hit: SearchResult) -> ExpandedResult:
     sibling_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
     siblings = [_related_symbol(graph, node_id) for node_id in sibling_ids]
 
-    return ExpandedResult(hit=hit, parent=parent, siblings=siblings, base_class=base_class)
+    callee_ids = [
+        v for _, v, d in graph.out_edges(hit.chunk_id, data=True) if d["type"] == "calls"
+    ]
+    callee_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
+    calls = [_related_symbol(graph, node_id) for node_id in callee_ids]
 
+    caller_ids = [
+        u for u, _, d in graph.in_edges(hit.chunk_id, data=True) if d["type"] == "calls"
+    ]
+    caller_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
+    called_by = [_related_symbol(graph, node_id) for node_id in caller_ids]
+
+    return ExpandedResult(
+        hit=hit,
+        parent=parent,
+        siblings=siblings,
+        base_class=base_class,
+        calls=calls,
+        called_by=called_by,
+    )
 
 def expand(hits: list[SearchResult], graph: nx.MultiDiGraph) -> list[ExpandedResult]:
     """
     Expand each retrieval hit with its one-hop structural neighborhood:
     parent class (if the hit is a method), sibling functions/methods in the
-    same container, and same-module base class (if present).
+    same container, same-module base class (if present), and direct
+    caller/callee functions via "calls" edges (same-module or cross-module).
 
     Purely graph-driven: never infers relationships from names or source
     text, never reads source files, never mutates the graph. Traversal is

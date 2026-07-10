@@ -13,6 +13,9 @@ from xsight.database.repositories import get_or_create_repository
 from xsight.embeddings.core import embed
 from xsight.embeddings.provider import OllamaEmbeddingProvider
 from xsight.graph.builder import build
+from xsight.graph.enrichment import add_calls_edges, add_import_edges
+from xsight.imports.core import resolve_imports
+from xsight.calls.core import resolve_calls
 from xsight.indexer.core import sync
 from xsight.parser.core import parse
 from xsight.scanner.core import scan
@@ -61,6 +64,14 @@ def run(
 
         console.print("[bold]Building knowledge graph...[/bold]")
         graph = build(modules)
+
+        console.print("[bold]Resolving imports...[/bold]")
+        import_edges = resolve_imports(modules)
+        add_import_edges(graph, import_edges)
+
+        console.print("[bold]Resolving calls...[/bold]")
+        call_edges = resolve_calls(modules)
+        add_calls_edges(graph, call_edges)
 
         console.print("[bold]Chunking symbols...[/bold]")
         chunks = chunk(graph, resolved_path)

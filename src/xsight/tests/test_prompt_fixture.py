@@ -50,6 +50,8 @@ def main() -> None:
         parent=RelatedSymbol(name="Derived", kind="class", start_line=2, end_line=10),
         base_class=RelatedSymbol(name="Base", kind="class", start_line=1, end_line=1),
         siblings=[RelatedSymbol(name="helper", kind="function", start_line=10, end_line=10)],
+        calls=[],
+        called_by=[],
     )
 
     result_2 = ExpandedResult(
@@ -57,6 +59,8 @@ def main() -> None:
         parent=None,
         base_class=None,
         siblings=[],
+        calls=[],
+        called_by=[],
     )
 
     prompt = build_prompt(QUERY, [result_1, result_2])

@@ -74,49 +74,55 @@ def main() -> None:
     assert decorated_method.start_line == 27 and decorated_method.end_line == 28
 
     # ---- imports ----
-    imports_by_module = {imp.module: imp for imp in module.imports}
-    assert set(imports_by_module) == {
-        "os", "numpy", "collections", "typing", "..parser.tests", ".pkg", "mymodule",
+    imports_by_key = {(imp.level, imp.module): imp for imp in module.imports}
+    assert set(imports_by_key) == {
+        (0, "os"),
+        (0, "numpy"),
+        (0, "collections"),
+        (0, "typing"),
+        (2, "parser.tests"),
+        (1, "pkg"),
+        (0, "mymodule"),
     }
 
     # import os
-    os_import = imports_by_module["os"]
+    os_import = imports_by_key[(0, "os")]
     assert os_import.imported_names == []
     assert os_import.line == 1
 
     # import numpy as np  -> module aliasing dropped (known Phase 1 gap)
-    numpy_import = imports_by_module["numpy"]
+    numpy_import = imports_by_key[(0, "numpy")]
     assert numpy_import.imported_names == []
     assert numpy_import.line == 2
 
     # from collections import OrderedDict
-    collections_import = imports_by_module["collections"]
+    collections_import = imports_by_key[(0, "collections")]
     assert len(collections_import.imported_names) == 1
     assert collections_import.imported_names[0].name == "OrderedDict"
     assert collections_import.imported_names[0].alias is None
     assert collections_import.line == 3
 
     # from typing import List, Dict as D  (mixed aliased/non-aliased names)
-    typing_import = imports_by_module["typing"]
+    typing_import = imports_by_key[(0, "typing")]
     typing_names = {n.name: n.alias for n in typing_import.imported_names}
     assert typing_names == {"List": None, "Dict": "D"}
     assert typing_import.line == 4
 
     # from ..parser.tests import sibling
-    relative_import = imports_by_module["..parser.tests"]
+    relative_import = imports_by_key[(2, "parser.tests")]
     assert len(relative_import.imported_names) == 1
     assert relative_import.imported_names[0].name == "sibling"
     assert relative_import.imported_names[0].alias is None
     assert relative_import.line == 5
 
     # from .pkg import helper
-    pkg_import = imports_by_module[".pkg"]
+    pkg_import = imports_by_key[(1, "pkg")]
     assert len(pkg_import.imported_names) == 1
     assert pkg_import.imported_names[0].name == "helper"
     assert pkg_import.line == 6
 
     # from mymodule import *
-    wildcard_import = imports_by_module["mymodule"]
+    wildcard_import = imports_by_key[(0, "mymodule")]
     assert len(wildcard_import.imported_names) == 1
     assert wildcard_import.imported_names[0].name == "*"
     assert wildcard_import.imported_names[0].alias is None

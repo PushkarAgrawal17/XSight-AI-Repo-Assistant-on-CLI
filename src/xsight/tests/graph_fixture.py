@@ -33,6 +33,7 @@ module_a = ParsedModule(
             end_line=3,
             parent_id="module_a.py::Derived",
             is_method=True,
+            calls=[],
         ),
         ParsedFunction(
             id="module_a.py::top_level_function",
@@ -41,6 +42,7 @@ module_a = ParsedModule(
             end_line=4,
             parent_id=None,
             is_method=False,
+            calls=[],
         ),
         ParsedFunction(
             id="module_a.py::Derived.helper",
@@ -49,6 +51,7 @@ module_a = ParsedModule(
             end_line=10,
             parent_id="module_a.py::Derived",
             is_method=True,
+            calls=[],
         ),
     ],
     imports=[],

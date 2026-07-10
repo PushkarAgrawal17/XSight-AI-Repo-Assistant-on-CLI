@@ -20,9 +20,12 @@ imports) are added.
 """
 
 from xsight.expansion.core import expand
+from xsight.expansion.models import RelatedSymbol
 from xsight.graph.builder import build
 from xsight.tests.graph_fixture import FIXTURE_MODULES
 from xsight.vectorstore.models import SearchResult
+from xsight.calls.core import resolve_calls
+from xsight.graph.enrichment import add_calls_edges
 
 
 def _fake_hit(chunk_id: str) -> SearchResult:
@@ -75,6 +78,8 @@ def main() -> None:
     assert top_result.parent is None
     assert top_result.base_class is None
     assert top_result.siblings == []
+    assert top_result.calls == []
+    assert top_result.called_by == []
 
     # ---- output order matches input order ----
     hits_multi = [top_fn_hit, method_hit, helper_hit]
@@ -92,5 +97,69 @@ def main() -> None:
     print("All assertions passed.")
 
 
+def _calls_fixture_modules():
+    from xsight.parser.models import ImportedName, ParsedCall, ParsedFunction, ParsedImport, ParsedModule
+
+    caller = ParsedModule(
+        relative_path="caller.py",
+        classes=[],
+        functions=[
+            ParsedFunction(
+                id="caller.py::run",
+                name="run",
+                start_line=1,
+                end_line=1,
+                parent_id=None,
+                is_method=False,
+                calls=[ParsedCall(callee_name="work", receiver=None, line=2)],
+            ),
+        ],
+        imports=[
+            ParsedImport(
+                module="callee",
+                level=0,
+                imported_names=[ImportedName(name="work", alias=None)],
+                line=1,
+            ),
+        ],
+    )
+    callee = ParsedModule(
+        relative_path="callee.py",
+        classes=[],
+        functions=[
+            ParsedFunction(
+                id="callee.py::work",
+                name="work",
+                start_line=5,
+                end_line=5,
+                parent_id=None,
+                is_method=False,
+                calls=[],
+            ),
+        ],
+        imports=[],
+    )
+    return [caller, callee]
+
+
 if __name__ == "__main__":
     main()
+    # ---- cross-module calls/called_by (isolated local fixture, not the
+    #      shared graph_fixture.py) ----
+    calls_modules = _calls_fixture_modules()
+    calls_graph = build(calls_modules)
+    add_calls_edges(calls_graph, resolve_calls(calls_modules))
+
+    run_hit = _fake_hit("caller.py::run")
+    run_hit.relative_path = "caller.py"
+    run_results = expand([run_hit], calls_graph)
+    assert run_results[0].calls == [RelatedSymbol(name="work", kind="function", start_line=5, end_line=5)]
+    assert run_results[0].called_by == []
+
+    work_hit = _fake_hit("callee.py::work")
+    work_hit.relative_path = "callee.py"
+    work_results = expand([work_hit], calls_graph)
+    assert work_results[0].called_by == [RelatedSymbol(name="run", kind="function", start_line=1, end_line=1)]
+    assert work_results[0].calls == []
+
+    print("All calls-expansion assertions passed.")
