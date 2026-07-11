@@ -3,6 +3,7 @@
 import typer
 
 from xsight.cli.commands import init as init_command
+from xsight.cli.commands import update as update_command
 from xsight.cli.commands import chat as chat_command
 
 app = typer.Typer(
@@ -12,6 +13,7 @@ app = typer.Typer(
 )
 
 app.command(name="init")(init_command.run)
+app.command(name="update")(update_command.run)
 app.command(name="chat")(chat_command.run)
 
 
