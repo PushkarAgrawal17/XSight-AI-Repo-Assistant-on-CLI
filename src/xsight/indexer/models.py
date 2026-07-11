@@ -10,3 +10,6 @@ class IndexSummary:
     removed: int
     unchanged: int
     total_files: int
+    added_files: list[str]
+    updated_files: list[str]
+    removed_files: list[str]

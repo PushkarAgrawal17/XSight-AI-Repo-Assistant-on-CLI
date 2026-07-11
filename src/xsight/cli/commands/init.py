@@ -19,7 +19,7 @@ from xsight.calls.core import resolve_calls
 from xsight.indexer.core import sync
 from xsight.parser.core import parse
 from xsight.scanner.core import scan
-from xsight.vectorstore.core import create_collection, upsert
+from xsight.vectorstore.core import build_point_id, create_collection, delete, list_point_ids, upsert
 from xsight.vectorstore.provider import QdrantVectorStoreProvider
 
 console = Console()
@@ -76,7 +76,12 @@ def run(
         console.print("[bold]Chunking symbols...[/bold]")
         chunks = chunk(graph, resolved_path)
 
-        console.print(f"[bold]Generating embeddings for {len(chunks)} chunks...[/bold]")
+        changed_files = set(index_summary.added_files) | set(index_summary.updated_files)
+        changed_chunks = [c for c in chunks if c.relative_path in changed_files]
+
+        console.print(
+            f"[bold]Generating embeddings for {len(changed_chunks)} of {len(chunks)} chunks...[/bold]"
+        )
         try:
             embedded = embed(chunks, embedding_provider)
         except requests.exceptions.ConnectionError as e:
@@ -91,6 +96,13 @@ def run(
         console.print("[bold]Storing vectors...[/bold]")
         try:
             create_collection(embedding_provider.dimension, vector_provider)
+
+            console.print("[bold]Removing stale vectors...[/bold]")
+            expected_ids = {build_point_id(repo_id, c.id) for c in chunks}
+            existing_ids = list_point_ids(repo_id, vector_provider)
+            stale_ids = existing_ids - expected_ids
+            delete(list(stale_ids), vector_provider)
+
             upsert(embedded, repo_id, vector_provider)
         except Exception as e:
             console.print(
@@ -102,7 +114,7 @@ def run(
     finally:
         conn.close()
 
-    _render_summary(resolved_path, result.summary, index_summary, len(chunks))
+    _render_summary(resolved_path, result.summary, index_summary, len(changed_chunks))
 
 
 def _render_summary(repo_path: Path, scan_summary, index_summary, chunk_count: int) -> None:

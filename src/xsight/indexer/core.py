@@ -17,6 +17,9 @@ def sync(
     fresh = {f.relative_path: f for f in snapshot.files}
 
     added = updated = removed = unchanged = 0
+    added_files: list[str] = []
+    updated_files: list[str] = []
+    removed_files: list[str] = []
 
     for relative_path, scanned_file in fresh.items():
         existing_row = existing.get(relative_path)
@@ -24,9 +27,11 @@ def sync(
         if existing_row is None:
             _insert_file(repo_id, scanned_file, conn)
             added += 1
+            added_files.append(relative_path)
         elif existing_row["content_hash"] != scanned_file.content_hash:
             _update_file(repo_id, scanned_file, conn)
             updated += 1
+            updated_files.append(relative_path)
         else:
             unchanged += 1
 
@@ -34,6 +39,7 @@ def sync(
         if relative_path not in fresh:
             _delete_file(repo_id, relative_path, conn)
             removed += 1
+            removed_files.append(relative_path)
 
     _touch_last_indexed_at(repo_id, conn)
     conn.commit()
@@ -44,6 +50,9 @@ def sync(
         removed=removed,
         unchanged=unchanged,
         total_files=len(fresh),
+        added_files=added_files,
+        updated_files=updated_files,
+        removed_files=removed_files,
     )
 
 
