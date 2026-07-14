@@ -36,3 +36,13 @@ def get_repository(path: Path, conn: sqlite3.Connection) -> int | None:
     ).fetchone()
 
     return row["id"] if row is not None else None
+
+def get_file_hashes(repo_id: int, conn: sqlite3.Connection) -> dict[str, str]:
+    """Read-only: relative_path -> content_hash for all files currently
+    persisted for repo_id. Used by callers that need to detect drift
+    against a fresh scan without performing a sync."""
+    rows = conn.execute(
+        "SELECT relative_path, content_hash FROM files WHERE repo_id = ?",
+        (repo_id,),
+    ).fetchall()
+    return {row["relative_path"]: row["content_hash"] for row in rows}

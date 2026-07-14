@@ -1,46 +1,63 @@
+"""`xsight chat` command."""
+
 from pathlib import Path
 
 import typer
 from google.genai import errors as genai_errors
 from rich.console import Console
 
-from xsight.chat.prompt import build_prompt
+from xsight.chat.core import NoResultsError, answer_question
+from xsight.cli.commands._pipeline import run_pipeline
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
-from xsight.database.repositories import get_repository
+from xsight.database.repositories import get_file_hashes, get_repository
 from xsight.embeddings.provider import OllamaEmbeddingProvider
-from xsight.expansion.core import expand
 from xsight.graph.builder import build
 from xsight.llm.provider import GeminiLLMProvider
 from xsight.parser.core import parse
-from xsight.retrieval.core import search
 from xsight.scanner.core import scan
 from xsight.vectorstore.provider import QdrantVectorStoreProvider
 
 console = Console()
 
-K = 5
+
+def _has_changed(scan_result, repo_id: int, conn) -> bool:
+    """Compare a fresh scan against persisted file hashes. Read-only."""
+    existing = get_file_hashes(repo_id, conn)
+    fresh = {f.relative_path: f.content_hash for f in scan_result.snapshot.files}
+    return existing != fresh
 
 
-def run(query: str, path: Path = typer.Argument(Path("."))) -> None:
-    resolved_path = path.expanduser().resolve()
-
-    conn = get_connection()
-    print(f"Resolved path: {resolved_path}")
-    repo_id = get_repository(resolved_path, conn)
-    print(f"Repo ID: {repo_id}")
-    conn.close()
-
-    if repo_id is None:
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
-        raise typer.Exit(1)
-
-    scan_result = scan(resolved_path)
+def _load_graph(resolved_path, scan_result):
     python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
     modules = [
         parse(resolved_path / f.relative_path, f.relative_path) for f in python_files
     ]
-    graph = build(modules)
+    return build(modules)
+
+
+def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Path("."))) -> None:
+    resolved_path = path.expanduser().resolve()
+
+    conn = get_connection()
+    repo_id = get_repository(resolved_path, conn)
+
+    if repo_id is None:
+        conn.close()
+        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        raise typer.Exit(1)
+
+    scan_result = scan(resolved_path)
+    changed = _has_changed(scan_result, repo_id, conn)
+    conn.close()
+
+    if changed:
+        console.print("[yellow]Repository has changed since the last index.[/yellow]")
+        if typer.confirm("Run `xsight update` now?", default=True):
+            run_pipeline(resolved_path, lambda p, c: get_repository(p, c))
+            scan_result = scan(resolved_path)  # fresh snapshot post-update
+
+    graph = _load_graph(resolved_path, scan_result)
 
     embedding_provider = OllamaEmbeddingProvider(
         model=settings.embedding_model,
@@ -51,24 +68,6 @@ def run(query: str, path: Path = typer.Argument(Path("."))) -> None:
         url=settings.qdrant_url,
     )
 
-    results = search(
-        query=query,
-        repo_id=repo_id,
-        k=K,
-        embedding_provider=embedding_provider,
-        vectorstore_provider=vectorstore_provider,
-    )
-
-    if not results:
-        console.print(
-            "[yellow]No indexed code was found for this repository. "
-            "Run `xsight init` again.[/yellow]"
-        )
-        raise typer.Exit(1)
-
-    expanded = expand(results, graph)
-    prompt = build_prompt(query, expanded)
-
     if settings.gemini_api_key is None:
         console.print("[red]Error:[/red] GEMINI_API_KEY is not configured.")
         raise typer.Exit(code=1)
@@ -78,18 +77,46 @@ def run(query: str, path: Path = typer.Argument(Path("."))) -> None:
         api_key=settings.gemini_api_key,
     )
 
-    llm_provider = GeminiLLMProvider(
-        model=settings.gemini_model,
-        api_key=settings.gemini_api_key,
-    )
+    def ask(q: str) -> None:
+        try:
+            answer = answer_question(
+                query=q,
+                repo_id=repo_id,
+                graph=graph,
+                embedding_provider=embedding_provider,
+                vectorstore_provider=vectorstore_provider,
+                llm_provider=llm_provider,
+            )
+        except NoResultsError:
+            console.print(
+                "[yellow]No indexed code was found for this repository. "
+                "Run `xsight init` again.[/yellow]"
+            )
+            return
+        except genai_errors.APIError as e:
+            console.print(
+                f"[red]Gemini API error ({e.code}): {e.message}[/red]\n"
+                "[red]Check your GEMINI_API_KEY and network connection.[/red]"
+            )
+            return
+        console.print(answer)
 
-    try:
-        answer = llm_provider.generate(prompt)
-    except genai_errors.APIError as e:
-        console.print(
-            f"[red]Gemini API error ({e.code}): {e.message}[/red]\n"
-            "[red]Check your GEMINI_API_KEY and network connection.[/red]"
-        )
-        raise typer.Exit(1)
+    if query is not None:
+        ask(query)
+        return
 
-    console.print(answer)
+    console.print("[dim]XSight chat -- type 'exit' or 'quit' to leave.[/dim]")
+    while True:
+        try:
+            user_input = console.input("[bold]> [/bold]").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit"):
+            break
+
+        ask(user_input)
+        console.print()
