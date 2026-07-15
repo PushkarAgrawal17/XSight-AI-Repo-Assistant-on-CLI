@@ -3,6 +3,8 @@ import networkx as nx
 from xsight.expansion.models import ExpandedResult, RelatedSymbol
 from xsight.vectorstore.models import SearchResult
 
+MAX_HOPS = 2
+MAX_RELATED = 10
 
 def _related_symbol(graph: nx.MultiDiGraph, node_id: str) -> RelatedSymbol:
     data = graph.nodes[node_id]
@@ -21,6 +23,42 @@ def _resolve_owner(graph: nx.MultiDiGraph, node_id: str) -> str:
     assert len(owners) == 1, f"{node_id} has {len(owners)} contains-owners: {owners}"
     return owners[0]
 
+def _bfs_calls(graph: nx.MultiDiGraph, start_id: str, reverse: bool) -> list[RelatedSymbol]:
+    """BFS over `calls` edges (or their reverse, for called_by) up to
+    MAX_HOPS, collecting at most MAX_RELATED symbols.
+
+    Deterministic: each BFS level is deduped into a set, then sorted by
+    node_id before being used as the next frontier or appended to the
+    result -- output never depends on graph/dict iteration order. A single
+    visited set (seeded with start_id) prevents cycles from looping.
+    """
+    visited = {start_id}
+    frontier = [start_id]
+    collected: list[str] = []
+
+    for _ in range(MAX_HOPS):
+        next_frontier: set[str] = set()
+        for node_id in frontier:
+            edges = graph.in_edges(node_id, data=True) if reverse else graph.out_edges(node_id, data=True)
+            for u, v, d in edges:
+                if d["type"] != "calls":
+                    continue
+                neighbor_id = u if reverse else v
+                if neighbor_id not in visited:
+                    visited.add(neighbor_id)
+                    next_frontier.add(neighbor_id)
+
+        level_sorted = sorted(next_frontier)
+        for node_id in level_sorted:
+            if len(collected) >= MAX_RELATED:
+                return [_related_symbol(graph, nid) for nid in collected]
+            collected.append(node_id)
+
+        frontier = level_sorted
+        if not frontier:
+            break
+
+    return [_related_symbol(graph, nid) for nid in collected]
 
 def _expand_one(graph: nx.MultiDiGraph, hit: SearchResult) -> ExpandedResult:
     # KeyError propagates here if hit.chunk_id isn't a graph node -- intentional,
@@ -53,18 +91,9 @@ def _expand_one(graph: nx.MultiDiGraph, hit: SearchResult) -> ExpandedResult:
     sibling_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
     siblings = [_related_symbol(graph, node_id) for node_id in sibling_ids]
 
-    callee_ids = [
-        v for _, v, d in graph.out_edges(hit.chunk_id, data=True) if d["type"] == "calls"
-    ]
-    callee_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
-    calls = [_related_symbol(graph, node_id) for node_id in callee_ids]
-
-    caller_ids = [
-        u for u, _, d in graph.in_edges(hit.chunk_id, data=True) if d["type"] == "calls"
-    ]
-    caller_ids.sort(key=lambda node_id: graph.nodes[node_id]["start_line"])
-    called_by = [_related_symbol(graph, node_id) for node_id in caller_ids]
-
+    calls = _bfs_calls(graph, hit.chunk_id, reverse=False)
+    called_by = _bfs_calls(graph, hit.chunk_id, reverse=True)
+    
     return ExpandedResult(
         hit=hit,
         parent=parent,
