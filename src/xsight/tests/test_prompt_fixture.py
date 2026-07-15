@@ -89,6 +89,9 @@ def main() -> None:
 
     # ---- block 1: all sections present, in order ----
     block_1 = _symbol_block(prompt, 1)
+    expected_citation_1 = "Source: module_a.py:1-1"
+    assert expected_citation_1 in block_1
+    assert block_1.index(expected_citation_1) < block_1.index(hit_content_1)
     assert hit_content_1 in block_1
     assert "Parent class:" in block_1
     assert "Base class:" in block_1
@@ -98,9 +101,17 @@ def main() -> None:
     # ---- block 2: all sections omitted ----
     block_2 = _symbol_block(prompt, 2)
     assert hit_content_2 in block_2
+    expected_citation_2 = "Source: module_a.py:1-1"
+    assert expected_citation_2 in block_2
     assert "Parent class:" not in block_2
     assert "Base class:" not in block_2
     assert "Sibling methods:" not in block_2
+
+    # ---- citations use hit metadata, not related-symbol data ----
+    # (Parent/base_class/sibling lines must remain unchanged -- no citation
+    # tags added to them, per the milestone's explicit scope limit.)
+    assert "Parent class:\nDerived (lines 2-10)" in block_1
+    assert "Base class:\nBase (lines 1-1)" in block_1
 
     # ---- no retrieval-implementation details leak into the prompt ----
     lowered = prompt.lower()

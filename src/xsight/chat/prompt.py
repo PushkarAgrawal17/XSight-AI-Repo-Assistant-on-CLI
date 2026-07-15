@@ -5,7 +5,9 @@ from xsight.expansion.models import ExpandedResult, RelatedSymbol
 _INSTRUCTIONS = (
     "You are XSight, an AI repository assistant.\n\n"
     "Answer the user's question using only the repository context below.\n"
-    "If the context is insufficient, say so instead of guessing."
+    "If the context is insufficient, say so instead of guessing.\n"
+    "When you reference a retrieved symbol, cite it using the exact "
+    "\"Source: path:start-end\" tag shown above that symbol's block."
 )
 
 
@@ -45,10 +47,16 @@ def format_called_by(called_by: list[RelatedSymbol]) -> str:
     return "Called by:\n" + "\n".join(lines)
 
 
+def format_citation(result: ExpandedResult) -> str:
+    hit = result.hit
+    return f"Source: {hit.relative_path}:{hit.start_line}-{hit.end_line}"
+
+
 def _format_symbol_block(index: int, result: ExpandedResult) -> str:
     sections = [
         section
         for section in (
+            format_citation(result),
             format_hit(result),
             format_parent(result.parent),
             format_base_class(result.base_class),

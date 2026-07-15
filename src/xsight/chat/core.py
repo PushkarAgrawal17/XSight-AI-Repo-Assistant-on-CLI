@@ -7,6 +7,8 @@ handling, no history management, and no console I/O -- those are session/CLI
 concerns, not this function's.
 """
 
+from pathlib import Path
+
 import networkx as nx
 from google.genai import errors as genai_errors
 
@@ -15,7 +17,7 @@ from xsight.chat.models import ChatTurn
 from xsight.embeddings.provider import EmbeddingProvider
 from xsight.expansion.core import expand
 from xsight.llm.provider import GeminiLLMProvider
-from xsight.retrieval.core import search
+from xsight.retrieval.core import search_hybrid
 from xsight.vectorstore.provider import VectorStoreProvider
 
 DEFAULT_K = 5
@@ -29,6 +31,7 @@ def answer_question(
     query: str,
     repo_id: int,
     graph: nx.MultiDiGraph,
+    repo_path: Path,
     embedding_provider: EmbeddingProvider,
     vectorstore_provider: VectorStoreProvider,
     llm_provider: GeminiLLMProvider,
@@ -38,10 +41,12 @@ def answer_question(
     """Answer one question. Raises NoResultsError if retrieval finds
     nothing, and lets genai_errors.APIError propagate on LLM failure --
     both are the caller's responsibility to handle/present."""
-    results = search(
+    results = search_hybrid(
         query=query,
         repo_id=repo_id,
         k=k,
+        graph=graph,
+        repo_path=repo_path,
         embedding_provider=embedding_provider,
         vectorstore_provider=vectorstore_provider,
     )

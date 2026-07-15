@@ -132,6 +132,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
                 query=q,
                 repo_id=repo_id,
                 graph=graph,
+                repo_path=resolved_path,
                 embedding_provider=embedding_provider,
                 vectorstore_provider=vectorstore_provider,
                 llm_provider=llm_provider,

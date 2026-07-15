@@ -2,6 +2,7 @@
 no-results path and the successful path, without any real Ollama/Qdrant/
 Gemini services."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from xsight.chat.core import NoResultsError, answer_question
@@ -12,6 +13,8 @@ from xsight.tests.chat_core_fixture import (
     make_graph_with_one_function,
 )
 from xsight.vectorstore.models import SearchResult
+
+FAKE_REPO_PATH = Path(__file__).parent  # unused once search_hybrid is patched
 
 
 def main() -> None:
@@ -29,15 +32,17 @@ def main() -> None:
         score=0.9,
     )
 
-    # Successful path: patch retrieval.core.search (the module-level import
-    # used inside chat.core) to avoid needing a real vectorstore provider.
-    with patch("xsight.chat.core.search", return_value=[fake_hit]):
+    # Successful path: patch chat.core's search_hybrid to avoid needing a
+    # real vectorstore provider or real graph/disk access for the
+    # symbolic-match half of hybrid retrieval.
+    with patch("xsight.chat.core.search_hybrid", return_value=[fake_hit]):
         answer = answer_question(
             query="what does f do?",
             repo_id=1,
             graph=graph,
+            repo_path=FAKE_REPO_PATH,
             embedding_provider=embedding_provider,
-            vectorstore_provider=None,  # unused once search() is patched
+            vectorstore_provider=None,  # unused once search_hybrid is patched
             llm_provider=llm_provider,
         )
     assert answer == "the answer", f"expected 'the answer', got {answer}"
@@ -45,12 +50,13 @@ def main() -> None:
     assert "what does f do?" in llm_provider.last_prompt, "prompt should include the query"
 
     # No-results path
-    with patch("xsight.chat.core.search", return_value=[]):
+    with patch("xsight.chat.core.search_hybrid", return_value=[]):
         try:
             answer_question(
                 query="nothing matches",
                 repo_id=1,
                 graph=graph,
+                repo_path=FAKE_REPO_PATH,
                 embedding_provider=embedding_provider,
                 vectorstore_provider=None,
                 llm_provider=llm_provider,
@@ -68,11 +74,12 @@ def main() -> None:
         )
     ]
 
-    with patch("xsight.chat.core.search", return_value=[fake_hit]):
+    with patch("xsight.chat.core.search_hybrid", return_value=[fake_hit]):
         answer_question(
             query="Current question",
             repo_id=1,
             graph=graph,
+            repo_path=FAKE_REPO_PATH,
             embedding_provider=embedding_provider,
             vectorstore_provider=None,
             llm_provider=llm_provider,

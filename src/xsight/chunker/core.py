@@ -25,6 +25,20 @@ def chunk(graph: nx.MultiDiGraph, repo_path: Path) -> list[Chunk]:
     return chunks
 
 
+def chunk_one(graph: nx.MultiDiGraph, repo_path: Path, node_id: str) -> Chunk:
+    """Build a chunk for a single function/method node.
+
+    Reuses the same per-node logic as chunk(), without rebuilding chunks
+    for every function in the graph. Intended for callers (e.g. hybrid
+    retrieval) that need one or a few specific chunks, not the full set.
+    """
+    data = graph.nodes[node_id]
+    assert data["kind"] == "function", (
+        f"chunk_one() called on non-function node {node_id} (kind={data['kind']})"
+    )
+    return _build_chunk(graph, repo_path, node_id, data)
+
+
 def _build_chunk(
     graph: nx.MultiDiGraph, repo_path: Path, node_id: str, data: dict
 ) -> Chunk:
@@ -49,7 +63,7 @@ def _module_of(graph: nx.MultiDiGraph, node_id: str) -> str:
     owners = [u for u, _, d in graph.in_edges(node_id, data=True) if d["type"] == "contains"]
     assert len(owners) == 1, f"expected exactly one contains-owner for {node_id}, got {owners}"
     owner_id = owners[0]
-    
+
     owner = graph.nodes[owner_id]
     if owner["kind"] == "module":
         return owner["relative_path"]
