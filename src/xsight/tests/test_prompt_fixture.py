@@ -14,6 +14,7 @@ without being a meaningful regression on its own.
 """
 
 from xsight.chat.prompt import build_prompt
+from xsight.chat.models import ChatTurn
 from xsight.expansion.models import ExpandedResult, RelatedSymbol
 from xsight.vectorstore.models import SearchResult
 
@@ -111,6 +112,73 @@ def main() -> None:
     assert "User question:" in empty_prompt
     assert QUERY in empty_prompt
     assert "=== Retrieved Symbol" not in empty_prompt
+
+
+    # --------------------------------------------------------------
+    prompt_without_history = build_prompt(
+        query="Explain indexing.",
+        expanded=[result_1],
+    )
+
+    prompt_empty_history = build_prompt(
+        query="Explain indexing.",
+        expanded=[result_1],
+        history=[],
+    )
+
+    assert (
+        prompt_without_history == prompt_empty_history
+    ), "empty history should produce identical prompt"
+
+
+    # --------------------------------------------------------------
+    history = [
+        ChatTurn(
+            question="What is indexing?",
+            answer="Indexing scans the repository.",
+        ),
+        ChatTurn(
+            question="What is Graph RAG?",
+            answer="Graph RAG enriches retrieval.",
+        ),
+    ]
+
+    prompt_history  = build_prompt(
+        query="How do updates work?",
+        expanded=[result_1],
+        history=history,
+    )
+
+    assert "=== Conversation History ===" in prompt_history
+    assert prompt_history .index("=== Conversation History ===") < prompt_history .index("User question:")
+
+    assert "What is indexing?" in prompt_history
+    assert "Indexing scans the repository." in prompt_history
+    assert "What is Graph RAG?" in prompt_history
+    assert "Graph RAG enriches retrieval." in prompt_history
+
+
+    # --------------------------------------------------------------
+    history = [
+        ChatTurn(question=f"Q{i}", answer=f"A{i}")
+        for i in range(5)
+    ]
+
+    history = history[-4:]
+
+    prompt_window  = build_prompt(
+        query="Current question",
+        expanded=[result_1],
+        history=history,
+    )
+
+    assert "Q0" not in prompt_window
+    assert "A0" not in prompt_window
+
+    for i in range(1, 5):
+        assert f"Q{i}" in prompt_window
+        assert f"A{i}" in prompt_window
+
 
     print("All assertions passed.")
 

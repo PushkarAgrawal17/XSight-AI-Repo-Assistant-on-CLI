@@ -1,12 +1,14 @@
 """`xsight chat` command."""
 
 from pathlib import Path
+from typing import Callable
 
 import typer
 from google.genai import errors as genai_errors
 from rich.console import Console
 
 from xsight.chat.core import NoResultsError, answer_question
+from xsight.chat.models import ChatTurn
 from xsight.cli.commands._pipeline import run_pipeline
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
@@ -19,6 +21,8 @@ from xsight.scanner.core import scan
 from xsight.vectorstore.provider import QdrantVectorStoreProvider
 
 console = Console()
+
+HISTORY_WINDOW = 4
 
 
 def _has_changed(scan_result, repo_id: int, conn) -> bool:
@@ -77,6 +81,51 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
         api_key=settings.gemini_api_key,
     )
 
+    history: list[ChatTurn] = []
+
+    def cmd_help() -> None:
+        console.print(
+            "[bold]Available commands:[/bold]\n"
+            "  help     Show this help message\n"
+            "  history  Show the current conversation history\n"
+            "  clear    Clear conversation history\n"
+            "  stats    Show session information\n"
+            "  exit     Leave the chat session\n"
+            "  quit     Leave the chat session"
+        )
+
+    def _preview(text: str) -> str:
+        return text if len(text) <= 200 else text[:200] + "..."
+
+    def cmd_history() -> None:
+        if not history:
+            console.print("[dim](no conversation history yet)[/dim]")
+            return
+        for i, turn in enumerate(history, start=1):
+            console.print(f"[bold]{i}. User:[/bold] {turn.question}")
+            console.print(f"   [bold]Assistant:[/bold] {_preview(turn.answer)}")
+
+    def cmd_clear() -> None:
+        history.clear()
+        console.print("[dim]Conversation history cleared.[/dim]")
+
+    def cmd_stats() -> None:
+        console.print(
+            f"[bold]Repository:[/bold] {resolved_path}\n"
+            f"[bold]Repo ID:[/bold] {repo_id}\n"
+            f"[bold]Conversation turns:[/bold] {len(history)}\n"
+            f"[bold]History window:[/bold] {HISTORY_WINDOW}\n"
+            f"[bold]Graph nodes:[/bold] {graph.number_of_nodes()}\n"
+            f"[bold]Graph edges:[/bold] {graph.number_of_edges()}"
+        )
+
+    commands: dict[str, Callable[[], None]] = {
+        "help": cmd_help,
+        "history": cmd_history,
+        "clear": cmd_clear,
+        "stats": cmd_stats,
+    }
+
     def ask(q: str) -> None:
         try:
             answer = answer_question(
@@ -86,6 +135,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
                 embedding_provider=embedding_provider,
                 vectorstore_provider=vectorstore_provider,
                 llm_provider=llm_provider,
+                history=history,
             )
         except NoResultsError:
             console.print(
@@ -100,6 +150,8 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
             )
             return
         console.print(answer)
+        history.append(ChatTurn(question=q, answer=answer))
+        del history[:-HISTORY_WINDOW]
 
     if query is not None:
         ask(query)
@@ -117,6 +169,12 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
             continue
         if user_input.lower() in ("exit", "quit"):
             break
+
+        command = commands.get(user_input.lower())
+        if command is not None:
+            command()
+            console.print()
+            continue
 
         ask(user_input)
         console.print()

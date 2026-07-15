@@ -1,4 +1,6 @@
 from xsight.expansion.models import ExpandedResult, RelatedSymbol
+from xsight.chat.models import ChatTurn
+from xsight.expansion.models import ExpandedResult, RelatedSymbol
 
 _INSTRUCTIONS = (
     "You are XSight, an AI repository assistant.\n\n"
@@ -59,8 +61,17 @@ def _format_symbol_block(index: int, result: ExpandedResult) -> str:
     body = "\n\n".join(sections)
     return f"=== Retrieved Symbol {index} ===\n\n{body}"
 
+def format_history(history: list[ChatTurn]) -> str:
+    if not history:
+        return ""
+    lines = [f"User:\n{turn.question}\n\nAssistant:\n{turn.answer}" for turn in history]
+    return "=== Conversation History ===\n\n" + "\n\n".join(lines)
 
-def build_prompt(query: str, expanded: list[ExpandedResult]) -> str:
+def build_prompt(
+    query: str,
+    expanded: list[ExpandedResult],
+    history: list[ChatTurn] | None = None,
+) -> str:
     """
     Build the complete LLM prompt from a user query and expanded retrieval
     results. Purely mechanical formatting -- no policy decisions (e.g.
@@ -71,7 +82,11 @@ def build_prompt(query: str, expanded: list[ExpandedResult]) -> str:
     hit in retrieval order. Never mentions retrieval scores, vector search,
     Qdrant, or embeddings -- the LLM sees repository structure only.
     """
-    blocks = [_INSTRUCTIONS, f"User question:\n{query}"]
+    blocks = [_INSTRUCTIONS]
+    history_block = format_history(history or [])
+    if history_block:
+        blocks.append(history_block)
+    blocks.append(f"User question:\n{query}")
     blocks.extend(
         _format_symbol_block(i, result) for i, result in enumerate(expanded, start=1)
     )

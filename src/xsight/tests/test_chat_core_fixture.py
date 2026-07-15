@@ -5,6 +5,7 @@ Gemini services."""
 from unittest.mock import patch
 
 from xsight.chat.core import NoResultsError, answer_question
+from xsight.chat.models import ChatTurn
 from xsight.tests.chat_core_fixture import (
     FakeEmbeddingProvider,
     FakeLLMProvider,
@@ -57,6 +58,31 @@ def main() -> None:
             assert False, "expected NoResultsError to be raised"
         except NoResultsError:
             pass
+
+
+    # --------------------------------------------------------------
+    history = [
+        ChatTurn(
+            question="Previous question",
+            answer="Previous answer",
+        )
+    ]
+
+    with patch("xsight.chat.core.search", return_value=[fake_hit]):
+        answer_question(
+            query="Current question",
+            repo_id=1,
+            graph=graph,
+            embedding_provider=embedding_provider,
+            vectorstore_provider=None,
+            llm_provider=llm_provider,
+            history=history,
+        )
+
+    assert "Previous question" in llm_provider.last_prompt
+    assert "Previous answer" in llm_provider.last_prompt
+    assert "Current question" in llm_provider.last_prompt
+
 
     print("All chat.core fixture assertions passed.")
 
