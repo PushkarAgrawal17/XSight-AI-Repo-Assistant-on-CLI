@@ -79,6 +79,7 @@ def build_prompt(
     query: str,
     expanded: list[ExpandedResult],
     history: list[ChatTurn] | None = None,
+    repo_summary: str | None = None,
 ) -> str:
     """
     Build the complete LLM prompt from a user query and expanded retrieval
@@ -91,6 +92,8 @@ def build_prompt(
     Qdrant, or embeddings -- the LLM sees repository structure only.
     """
     blocks = [_INSTRUCTIONS]
+    if repo_summary:
+        blocks.append(f"=== Repository Overview ===\n\n{repo_summary}")
     history_block = format_history(history or [])
     if history_block:
         blocks.append(history_block)

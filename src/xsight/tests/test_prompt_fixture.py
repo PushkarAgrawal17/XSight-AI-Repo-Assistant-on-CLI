@@ -191,6 +191,16 @@ def main() -> None:
         assert f"A{i}" in prompt_window
 
 
+    # ---- repo_summary block appears before history/question when provided ----
+    prompt_with_summary = build_prompt(QUERY, [result_1], repo_summary="Repository: xsight\nLanguages: python")
+    assert "=== Repository Overview ===" in prompt_with_summary
+    assert "Repository: xsight" in prompt_with_summary
+    assert prompt_with_summary.index("=== Repository Overview ===") < prompt_with_summary.index("User question:")
+
+    # ---- omitted entirely when not provided (backward compatible) ----
+    assert "=== Repository Overview ===" not in prompt
+
+
     print("All assertions passed.")
 
 

@@ -9,6 +9,7 @@ from rich.console import Console
 
 from xsight.chat.core import NoResultsError, answer_question
 from xsight.chat.models import ChatTurn
+from xsight.chat.repo_summary import build_repo_summary
 from xsight.cli.commands._pipeline import run_pipeline
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
@@ -62,6 +63,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
             scan_result = scan(resolved_path)  # fresh snapshot post-update
 
     graph = _load_graph(resolved_path, scan_result)
+    repo_summary = build_repo_summary(resolved_path, scan_result.snapshot, graph)
 
     embedding_provider = OllamaEmbeddingProvider(
         model=settings.embedding_model,
@@ -137,6 +139,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
                 vectorstore_provider=vectorstore_provider,
                 llm_provider=llm_provider,
                 history=history,
+                repo_summary=repo_summary,
             )
         except NoResultsError:
             console.print(

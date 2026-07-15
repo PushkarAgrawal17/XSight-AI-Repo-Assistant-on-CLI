@@ -37,6 +37,7 @@ def answer_question(
     llm_provider: GeminiLLMProvider,
     k: int = DEFAULT_K,
     history: list[ChatTurn] | None = None,
+    repo_summary: str | None = None,
 ) -> str:
     """Answer one question. Raises NoResultsError if retrieval finds
     nothing, and lets genai_errors.APIError propagate on LLM failure --
@@ -54,5 +55,5 @@ def answer_question(
         raise NoResultsError(query)
 
     expanded = expand(results, graph)
-    prompt = build_prompt(query, expanded, history)
+    prompt = build_prompt(query, expanded, history, repo_summary)
     return llm_provider.generate(prompt)
