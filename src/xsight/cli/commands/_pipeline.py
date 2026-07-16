@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Callable
 import sqlite3
+import networkx as nx
 
 import requests
 import typer
@@ -11,7 +12,7 @@ from rich.console import Console
 from xsight.chunker.core import chunk
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
-from xsight.database.repositories import get_cached_modules, save_parsed_module, delete_parsed_modules
+from xsight.database.repositories import get_cached_modules, save_parsed_module, delete_parsed_modules, get_file_hashes
 from xsight.embeddings.core import embed
 from xsight.embeddings.provider import OllamaEmbeddingProvider
 from xsight.graph.builder import build
@@ -19,6 +20,7 @@ from xsight.graph.enrichment import add_calls_edges, add_import_edges
 from xsight.imports.core import resolve_imports
 from xsight.calls.core import resolve_calls
 from xsight.indexer.core import sync
+from xsight.parser.models import ParsedModule
 from xsight.parser.core import parse, to_json, from_json
 from xsight.scanner.core import scan
 from xsight.vectorstore.core import build_point_id, create_collection, delete, list_point_ids, upsert
@@ -43,6 +45,31 @@ def load_modules(resolved_path, repo_id, python_files, index_summary, conn):
 
     delete_parsed_modules(repo_id, index_summary.removed_files, conn)
     return modules
+
+
+def build_graph(modules: list[ParsedModule]) -> nx.MultiDiGraph:
+    graph = build(modules)
+    add_import_edges(graph, resolve_imports(modules))
+    add_calls_edges(graph, resolve_calls(modules))
+    return graph
+
+
+def load_repo_graph(resolved_path, repo_id, python_files, index_summary, conn) -> nx.MultiDiGraph:
+    """Shared orchestration for any command that needs a graph: load modules
+    (incremental) then build+enrich via build_graph(). Keeps progress
+    messages centralized here rather than duplicated per caller."""
+    modules = load_modules(resolved_path, repo_id, python_files, index_summary, conn)
+    console.print("[bold]Building knowledge graph...[/bold]")
+    console.print("[bold]Resolving imports...[/bold]")
+    console.print("[bold]Resolving calls...[/bold]")
+    return build_graph(modules)
+
+
+def has_repo_changed(repo_id, scan_result, conn) -> bool:
+    """Read-only comparison against persisted file hashes. Never writes."""
+    existing = get_file_hashes(repo_id, conn)
+    fresh = {f.relative_path: f.content_hash for f in scan_result.snapshot.files}
+    return existing != fresh
 
 
 def run_pipeline(resolved_path: Path, resolve_repo_id: ResolveRepoId) -> None:
@@ -70,15 +97,7 @@ def run_pipeline(resolved_path: Path, resolve_repo_id: ResolveRepoId) -> None:
         conn.commit()
 
         console.print("[bold]Building knowledge graph...[/bold]")
-        graph = build(modules)
-
-        console.print("[bold]Resolving imports...[/bold]")
-        import_edges = resolve_imports(modules)
-        add_import_edges(graph, import_edges)
-
-        console.print("[bold]Resolving calls...[/bold]")
-        call_edges = resolve_calls(modules)
-        add_calls_edges(graph, call_edges)
+        graph = build_graph(modules)
 
         console.print("[bold]Chunking symbols...[/bold]")
         chunks = chunk(graph, resolved_path)

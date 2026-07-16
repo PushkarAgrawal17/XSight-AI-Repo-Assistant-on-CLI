@@ -10,30 +10,19 @@ from rich.console import Console
 from xsight.chat.core import NoResultsError, answer_question
 from xsight.chat.models import ChatTurn
 from xsight.chat.repo_summary import build_repo_summary
-from xsight.cli.commands._pipeline import run_pipeline
+from xsight.cli.commands._pipeline import run_pipeline, load_repo_graph
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
 from xsight.database.repositories import get_repository
-from xsight.cli.commands._pipeline import load_modules
 from xsight.indexer.core import sync
 from xsight.embeddings.provider import OllamaEmbeddingProvider
-from xsight.graph.builder import build
 from xsight.llm.provider import GeminiLLMProvider
-from xsight.parser.core import parse
 from xsight.scanner.core import scan
 from xsight.vectorstore.provider import QdrantVectorStoreProvider
 
 console = Console()
 
 HISTORY_WINDOW = 4
-
-
-def _load_graph(resolved_path, scan_result):
-    python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
-    modules = [
-        parse(resolved_path / f.relative_path, f.relative_path) for f in python_files
-    ]
-    return build(modules)
 
 
 def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Path("."))) -> None:
@@ -64,7 +53,8 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
             index_summary = sync(repo_id, scan_result.snapshot, conn)
             conn.commit()
 
-    graph = _load_graph(resolved_path, scan_result, repo_id, index_summary, conn)
+    python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
+    graph = load_repo_graph(resolved_path, repo_id, python_files, index_summary, conn)
     conn.close()
     repo_summary = build_repo_summary(resolved_path, scan_result.snapshot, graph)
 
