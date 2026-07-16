@@ -7,6 +7,8 @@ from xsight.cli.commands import update as update_command
 from xsight.cli.commands import chat as chat_command
 from xsight.cli.commands import architecture as architecture_command
 from xsight.cli.commands import modules as modules_command
+from xsight.cli.commands import dependencies as dependencies_command
+from xsight.cli.commands import symbols as symbols_command
 
 app = typer.Typer(
     name="xsight",
@@ -19,6 +21,8 @@ app.command(name="update")(update_command.run)
 app.command(name="chat")(chat_command.run)
 app.command(name="architecture")(architecture_command.run)
 app.command(name="modules")(modules_command.run)
+app.command(name="dependencies")(dependencies_command.run)
+app.command(name="symbols")(symbols_command.run)
 
 
 @app.callback()
