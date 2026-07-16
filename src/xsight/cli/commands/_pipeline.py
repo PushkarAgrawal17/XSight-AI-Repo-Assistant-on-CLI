@@ -11,6 +11,7 @@ from rich.console import Console
 from xsight.chunker.core import chunk
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
+from xsight.database.repositories import get_cached_modules, save_parsed_module, delete_parsed_modules
 from xsight.embeddings.core import embed
 from xsight.embeddings.provider import OllamaEmbeddingProvider
 from xsight.graph.builder import build
@@ -18,7 +19,7 @@ from xsight.graph.enrichment import add_calls_edges, add_import_edges
 from xsight.imports.core import resolve_imports
 from xsight.calls.core import resolve_calls
 from xsight.indexer.core import sync
-from xsight.parser.core import parse
+from xsight.parser.core import parse, to_json, from_json
 from xsight.scanner.core import scan
 from xsight.vectorstore.core import build_point_id, create_collection, delete, list_point_ids, upsert
 from xsight.vectorstore.provider import QdrantVectorStoreProvider
@@ -26,6 +27,22 @@ from xsight.vectorstore.provider import QdrantVectorStoreProvider
 console = Console()
 
 ResolveRepoId = Callable[[Path, sqlite3.Connection], int]
+
+def load_modules(resolved_path, repo_id, python_files, index_summary, conn):
+    changed = set(index_summary.added_files) | set(index_summary.updated_files)
+    cached = get_cached_modules(repo_id, conn)
+
+    modules = []
+    for f in python_files:
+        if f.relative_path in changed or f.relative_path not in cached:
+            module = parse(resolved_path / f.relative_path, f.relative_path)
+            save_parsed_module(repo_id, f.relative_path, f.content_hash, to_json(module), conn)
+        else:
+            module = from_json(cached[f.relative_path])
+        modules.append(module)
+
+    delete_parsed_modules(repo_id, index_summary.removed_files, conn)
+    return modules
 
 
 def run_pipeline(resolved_path: Path, resolve_repo_id: ResolveRepoId) -> None:
@@ -49,10 +66,8 @@ def run_pipeline(resolved_path: Path, resolve_repo_id: ResolveRepoId) -> None:
 
         console.print("[bold]Parsing source files...[/bold]")
         python_files = [f for f in result.snapshot.files if f.language == "python"]
-        modules = [
-            parse(resolved_path / f.relative_path, f.relative_path)
-            for f in python_files
-        ]
+        modules = load_modules(resolved_path, repo_id, python_files, index_summary, conn)
+        conn.commit()
 
         console.print("[bold]Building knowledge graph...[/bold]")
         graph = build(modules)

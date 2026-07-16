@@ -1,3 +1,5 @@
+import dataclasses
+import json
 from pathlib import Path
 
 import tree_sitter_python as tspython
@@ -20,6 +22,38 @@ _FUNCTION_NODE_TYPES = ("function_definition", "async_function_definition")
 def build_symbol_id(relative_path: str, name: str, parent_name: str | None = None) -> str:
     qualified = f"{parent_name}.{name}" if parent_name else name
     return f"{relative_path}::{qualified}"
+
+def to_json(module: ParsedModule) -> str:
+    return json.dumps(dataclasses.asdict(module))
+
+
+def from_json(data: str) -> ParsedModule:
+    raw = json.loads(data)
+    return ParsedModule(
+        relative_path=raw["relative_path"],
+        classes=[ParsedClass(**c) for c in raw["classes"]],
+        functions=[
+            ParsedFunction(
+                id=f["id"],
+                name=f["name"],
+                start_line=f["start_line"],
+                end_line=f["end_line"],
+                parent_id=f["parent_id"],
+                is_method=f["is_method"],
+                calls=[ParsedCall(**c) for c in f["calls"]],
+            )
+            for f in raw["functions"]
+        ],
+        imports=[
+            ParsedImport(
+                module=i["module"],
+                level=i["level"],
+                imported_names=[ImportedName(**n) for n in i["imported_names"]],
+                line=i["line"],
+            )
+            for i in raw["imports"]
+        ],
+    )
 
 
 def parse(file_path: Path, relative_path: str) -> ParsedModule:

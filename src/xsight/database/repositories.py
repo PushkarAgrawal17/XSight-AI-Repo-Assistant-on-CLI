@@ -46,3 +46,33 @@ def get_file_hashes(repo_id: int, conn: sqlite3.Connection) -> dict[str, str]:
         (repo_id,),
     ).fetchall()
     return {row["relative_path"]: row["content_hash"] for row in rows}
+
+def get_cached_modules(repo_id: int, conn: sqlite3.Connection) -> dict[str, str]:
+    rows = conn.execute(
+        "SELECT relative_path, data FROM parsed_modules WHERE repo_id = ?",
+        (repo_id,),
+    ).fetchall()
+    return {row["relative_path"]: row["data"] for row in rows}
+
+
+def save_parsed_module(
+    repo_id: int, relative_path: str, content_hash: str, data: str, conn: sqlite3.Connection
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO parsed_modules (repo_id, relative_path, content_hash, data)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (repo_id, relative_path)
+        DO UPDATE SET content_hash = excluded.content_hash, data = excluded.data
+        """,
+        (repo_id, relative_path, content_hash, data),
+    )
+
+
+def delete_parsed_modules(repo_id: int, relative_paths: list[str], conn: sqlite3.Connection) -> None:
+    if not relative_paths:
+        return
+    conn.executemany(
+        "DELETE FROM parsed_modules WHERE repo_id = ? AND relative_path = ?",
+        [(repo_id, path) for path in relative_paths],
+    )

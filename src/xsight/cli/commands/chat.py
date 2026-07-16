@@ -13,7 +13,9 @@ from xsight.chat.repo_summary import build_repo_summary
 from xsight.cli.commands._pipeline import run_pipeline
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
-from xsight.database.repositories import get_file_hashes, get_repository
+from xsight.database.repositories import get_repository
+from xsight.cli.commands._pipeline import load_modules
+from xsight.indexer.core import sync
 from xsight.embeddings.provider import OllamaEmbeddingProvider
 from xsight.graph.builder import build
 from xsight.llm.provider import GeminiLLMProvider
@@ -24,13 +26,6 @@ from xsight.vectorstore.provider import QdrantVectorStoreProvider
 console = Console()
 
 HISTORY_WINDOW = 4
-
-
-def _has_changed(scan_result, repo_id: int, conn) -> bool:
-    """Compare a fresh scan against persisted file hashes. Read-only."""
-    existing = get_file_hashes(repo_id, conn)
-    fresh = {f.relative_path: f.content_hash for f in scan_result.snapshot.files}
-    return existing != fresh
 
 
 def _load_graph(resolved_path, scan_result):
@@ -53,16 +48,24 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
         raise typer.Exit(1)
 
     scan_result = scan(resolved_path)
-    changed = _has_changed(scan_result, repo_id, conn)
-    conn.close()
+    index_summary = sync(repo_id, scan_result.snapshot, conn)
+    conn.commit()
+    changed = bool(
+        index_summary.added_files or index_summary.updated_files or index_summary.removed_files
+    )
 
     if changed:
         console.print("[yellow]Repository has changed since the last index.[/yellow]")
         if typer.confirm("Run `xsight update` now?", default=True):
+            conn.close()
             run_pipeline(resolved_path, lambda p, c: get_repository(p, c))
             scan_result = scan(resolved_path)  # fresh snapshot post-update
+            conn = get_connection()
+            index_summary = sync(repo_id, scan_result.snapshot, conn)
+            conn.commit()
 
-    graph = _load_graph(resolved_path, scan_result)
+    graph = _load_graph(resolved_path, scan_result, repo_id, index_summary, conn)
+    conn.close()
     repo_summary = build_repo_summary(resolved_path, scan_result.snapshot, graph)
 
     embedding_provider = OllamaEmbeddingProvider(

@@ -20,4 +20,13 @@ CREATE TABLE IF NOT EXISTS files (
     FOREIGN KEY (repo_id) REFERENCES repositories(id),
     UNIQUE (repo_id, relative_path)
 );
+
+CREATE TABLE IF NOT EXISTS parsed_modules (
+    repo_id INTEGER NOT NULL,
+    relative_path TEXT NOT NULL,
+    content_hash TEXT,
+    data TEXT NOT NULL,
+    FOREIGN KEY (repo_id) REFERENCES repositories(id),
+    UNIQUE (repo_id, relative_path)
+);
 """
