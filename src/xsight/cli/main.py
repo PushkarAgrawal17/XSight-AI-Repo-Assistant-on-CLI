@@ -9,6 +9,8 @@ from xsight.cli.commands import architecture as architecture_command
 from xsight.cli.commands import modules as modules_command
 from xsight.cli.commands import dependencies as dependencies_command
 from xsight.cli.commands import symbols as symbols_command
+from xsight.cli.commands import graph as graph_command
+from xsight.cli.commands import stats as stats_command
 
 app = typer.Typer(
     name="xsight",
@@ -23,6 +25,8 @@ app.command(name="architecture")(architecture_command.run)
 app.command(name="modules")(modules_command.run)
 app.command(name="dependencies")(dependencies_command.run)
 app.command(name="symbols")(symbols_command.run)
+app.command(name="graph")(graph_command.run)
+app.command(name="stats")(stats_command.run)
 
 
 @app.callback()
