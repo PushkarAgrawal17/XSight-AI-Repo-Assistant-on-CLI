@@ -6,6 +6,7 @@ from xsight.cli.commands import init as init_command
 from xsight.cli.commands import update as update_command
 from xsight.cli.commands import chat as chat_command
 from xsight.cli.commands import architecture as architecture_command
+from xsight.cli.commands import modules as modules_command
 
 app = typer.Typer(
     name="xsight",
@@ -17,6 +18,7 @@ app.command(name="init")(init_command.run)
 app.command(name="update")(update_command.run)
 app.command(name="chat")(chat_command.run)
 app.command(name="architecture")(architecture_command.run)
+app.command(name="modules")(modules_command.run)
 
 
 @app.callback()
