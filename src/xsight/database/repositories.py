@@ -76,3 +76,37 @@ def delete_parsed_modules(repo_id: int, relative_paths: list[str], conn: sqlite3
         "DELETE FROM parsed_modules WHERE repo_id = ? AND relative_path = ?",
         [(repo_id, path) for path in relative_paths],
     )
+
+
+def list_repositories(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Read-only: every indexed repository, ordered by id. Used by commands
+    that need the repository catalog rather than a single repository."""
+    return conn.execute(
+        "SELECT id, name, path, last_indexed_at FROM repositories ORDER BY id"
+    ).fetchall()
+
+
+def delete_repository(repo_id: int, conn: sqlite3.Connection) -> None:
+    """Delete all persisted data for a repository: parsed modules, files,
+    and the repository row itself, in FK-safe child-before-parent order.
+    Caller commits."""
+    conn.execute("DELETE FROM parsed_modules WHERE repo_id = ?", (repo_id,))
+    conn.execute("DELETE FROM files WHERE repo_id = ?", (repo_id,))
+    conn.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
+
+
+def get_repository_by_id(repo_id: int, conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """Read-only: full repository row by id. Used by callers that already
+    have a repo_id and need its display metadata (name/path/timestamps)."""
+    return conn.execute(
+        "SELECT id, name, path, created_at, last_indexed_at FROM repositories WHERE id = ?",
+        (repo_id,),
+    ).fetchone()
+
+
+def clear_parsed_modules(repo_id: int, conn: sqlite3.Connection) -> int:
+    """Delete all cached parsed modules for a repository, leaving files
+    and repositories rows untouched. Returns the number of rows deleted.
+    Caller commits."""
+    cursor = conn.execute("DELETE FROM parsed_modules WHERE repo_id = ?", (repo_id,))
+    return cursor.rowcount
