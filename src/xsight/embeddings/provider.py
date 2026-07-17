@@ -2,7 +2,7 @@ from typing import Protocol
 
 import requests
 
-_DEFAULT_TIMEOUT_SECONDS = 60
+_DEFAULT_TIMEOUT_SECONDS = None
 
 
 class EmbeddingProvider(Protocol):

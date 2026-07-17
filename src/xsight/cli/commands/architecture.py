@@ -29,18 +29,23 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
     repo_id = get_repository(resolved_path, conn)
     if repo_id is None:
         conn.close()
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         raise typer.Exit(code=1)
 
     scan_result = scan(resolved_path)  # filesystem read only, no DB write
 
     if has_repo_changed(repo_id, scan_result, conn):
         conn.close()
-        console.print(
-            "[yellow]Repository has changed since the last index.[/yellow]\n"
-            "Run [bold]xsight update[/bold] first, then retry."
-        )
+        console.print("[yellow]⚠ Repository has changed since the last index. [/yellow] ")
+        console.print("[yellow]Run [bold]xsight update[/bold] first, then retry.[/yellow]")
+        
         raise typer.Exit(code=1)
+
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
+    console.print()
 
     python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
     unchanged_summary = IndexSummary(
@@ -63,24 +68,31 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
             import_in_degree[target] += 1
     top_imported = import_in_degree.most_common(5)
 
-    console.print(f"[bold]Repository:[/bold] {resolved_path}\n")
-    console.print("[bold]Files[/bold]")
+    console.print()
+    console.print(f"[bold cyan]Architecture[/bold cyan]  [white bold]{resolved_path}[/white bold]")
+    console.print("[cyan]" + "─" * 60 + "[/cyan]")
+    console.print()
+
+    console.print("[bold cyan]Files[/bold cyan]")
     breakdown = ", ".join(f"{c} {lang}" for lang, c in language_counts.most_common())
     console.print(f"  Total: {len(scan_result.snapshot.files)}" + (f" ({breakdown})" if breakdown else ""))
-    console.print("\n[bold]Structure[/bold]")
-    console.print(f"  Modules:   {module_count}")
-    console.print(f"  Classes:   {class_count}")
-    console.print(f"  Functions: {function_count}")
-    console.print("\n[bold]Relationships[/bold]")
+
+    console.print()
+    console.print("[bold cyan]Structure[/bold cyan]")
+    console.print(f"  Modules:   [bold green]{module_count}[/bold green]")
+    console.print(f"  Classes:   [bold green]{class_count}[/bold green]")
+    console.print(f"  Functions: [bold green]{function_count}[/bold green]")
+
+    console.print()
+    console.print("[bold cyan]Relationships[/bold cyan]")
     console.print(f"  contains:  {edge_counts.get('contains', 0)} edges")
-    console.print(f"  inherits:  {edge_counts.get('inherits', 0)} edges (same-module only)")
+    console.print(f"  inherits:  {edge_counts.get('inherits', 0)} edges [dim](same-module only)[/dim]")
     console.print(f"  imports:   {edge_counts.get('imports', 0)} edges")
-    console.print(f"  calls:     {edge_counts.get('calls', 0)} edges (statically resolvable only)")
+    console.print(f"  calls:     {edge_counts.get('calls', 0)} edges [dim](statically resolvable only)[/dim]")
 
     if top_imported:
-        console.print("\n[bold]Most imported modules[/bold]")
+        console.print()
+        console.print("[bold cyan]Most Imported Modules[/bold cyan]")
         for i, (node_id, count) in enumerate(top_imported, start=1):
-            # Point 4 fix: display the node's relative_path attribute, not
-            # the raw node id, so this matches what users see elsewhere.
             display_path = graph.nodes[node_id].get("relative_path", node_id)
-            console.print(f"  {i}. {display_path} ({count} importers)")
+            console.print(f"  {i}. [bold green]{display_path}[/bold green] — {count} importers")

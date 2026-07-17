@@ -11,64 +11,87 @@ from rich.table import Table
 
 console = Console()
 
-# Style convention (reused across future commands):
-#   page title / rule   -> bold cyan
-#   section heading      -> bold cyan
-#   command name          -> bold green
-#   description            -> default (neutral)
-#   examples/metadata       -> dim
-#   success                   -> bold green
-#   warning                    -> bold yellow
-#   error                       -> bold red
-
 
 def _command_table(rows: list[tuple[str, str]]) -> Table:
-    table = Table(show_header=False, box=None, padding=(0, 2, 0, 2))
+    table = Table(
+        show_header=False,
+        box=None,
+        padding=(0, 2),
+        expand=False,
+    )
+
     table.add_column(style="bold green", no_wrap=True)
-    table.add_column(style="default")
-    for name, description in rows:
-        table.add_row(name, description)
+    table.add_column()
+
+    for command, description in rows:
+        table.add_row(f"xsight {command}", description)
+
     return table
 
 
+def _section(title: str, rows: list[tuple[str, str]]) -> None:
+    console.print(f"[bold cyan]{title}[/bold cyan]")
+    console.print("[cyan]" + "─" * 55 + "[/cyan]")
+    console.print(_command_table(rows))
+    console.print()
+
+
 def run() -> None:
-    console.rule("[bold cyan]XSight — AI Repository Assistant[/bold cyan]")
+    console.rule(style="green")
+    console.print(
+        "[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]",
+        justify="center",
+    )
+    console.print(
+        "[white]AI Repository Assistant[/white]",
+        justify="center",
+    )
+    console.rule(style="green")
+
+
+    _section(
+        "Repository Management",
+        [
+            ("init", "Index a repository"),
+            ("update", "Update an indexed repository"),
+        ],
+    )
+
+    _section(
+        "Repository Exploration",
+        [
+            ("architecture", "Show repository architecture"),
+            ("stats", "Show repository statistics"),
+            ("modules", "List repository modules"),
+            ("symbols", "List repository symbols"),
+            ("dependencies", "Inspect module dependencies"),
+            ("graph", "Inspect the internal graph"),
+        ],
+    )
+
+    _section(
+        "AI",
+        [
+            ("chat", "Ask questions about the repository"),
+        ],
+    )
+
+    _section(
+        "Utilities",
+        [
+            ("help", "Show this help page"),
+        ],
+    )
+
+    console.print("[bold cyan]Quick Start[/bold cyan]")
+    console.print("[cyan]" + "─" * 55 + "[/cyan]")
+    console.print("[green]  xsight init .[/green]")
+    console.print("[green]  xsight update[/green]")
+    console.print("[green]  xsight architecture[/green]")
+    console.print("[green]  xsight modules[/green]")
+    console.print("[green]  xsight chat[/green]")
     console.print()
 
-    console.print("[bold cyan]Repository Management[/bold cyan]")
-    console.print(_command_table([
-        ("init", "Index a repository"),
-        ("update", "Update an indexed repository"),
-    ]))
-    console.print()
-
-    console.print("[bold cyan]Repository Exploration[/bold cyan]")
-    console.print(_command_table([
-        ("architecture", "Repository architecture overview"),
-        ("stats", "Repository statistics"),
-        ("modules", "List repository modules"),
-        ("symbols", "List classes, functions and methods"),
-        ("dependencies", "Inspect module dependencies"),
-        ("graph", "Inspect the internal graph"),
-    ]))
-    console.print()
-
-    console.print("[bold cyan]AI[/bold cyan]")
-    console.print(_command_table([
-        ("chat", "Ask questions about the repository"),
-    ]))
-    console.print()
-
-    console.print("[bold cyan]Utility[/bold cyan]")
-    console.print(_command_table([
-        ("help", "Show this help page"),
-    ]))
-    console.print()
-
-    console.print("[bold cyan]Examples[/bold cyan]")
-    console.print("[dim]  xsight init .[/dim]")
-    console.print("[dim]  xsight update[/dim]")
-    console.print("[dim]  xsight architecture[/dim]")
-    console.print("[dim]  xsight modules[/dim]")
-    console.print("[dim]  xsight chat[/dim]")
+    console.print("[bold]More information[/bold]")
+    console.print("  [green]xsight <command> --help[/green]")
     console.print()

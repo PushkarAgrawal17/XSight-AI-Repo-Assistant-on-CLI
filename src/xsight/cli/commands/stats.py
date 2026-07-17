@@ -55,18 +55,22 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
     repo_id = get_repository(resolved_path, conn)
     if repo_id is None:
         conn.close()
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         raise typer.Exit(code=1)
 
     scan_result = scan(resolved_path)
 
     if has_repo_changed(repo_id, scan_result, conn):
         conn.close()
-        console.print(
-            "[yellow]Repository has changed since the last index.[/yellow]\n"
-            "Run [bold]xsight update[/bold] first, then retry."
-        )
+        console.print("[yellow]⚠ Repository has changed since the last index. [/yellow] ")
+        console.print("[yellow]Run [bold]xsight update[/bold] first, then retry.[/yellow]")
         raise typer.Exit(code=1)
+
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
+    console.print()
 
     all_files = scan_result.snapshot.files
     python_files = [f for f in all_files if f.language == "python"]
@@ -121,36 +125,44 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
     )[:TOP_N]
 
     # ---- Render ----
-    console.print("[bold]Repository Statistics[/bold]\n")
+    console.print()
+    console.print(f"[bold cyan]Statistics[/bold cyan]  [white]{resolved_path}[/white]")
+    console.print("[cyan]" + "─" * 55 + "[/cyan]")
+    console.print()
 
-    console.print("[bold]Files[/bold]")
+    console.print("[bold cyan]Files[/bold cyan]")
     console.print(f"  Total files:    {total_files}")
     console.print(f"  Python files:   {len(python_files)}")
     console.print(f"  Markdown files: {md_files}")
     console.print(f"  Other files:    {other_files}")
 
-    console.print("\n[bold]Symbols[/bold]")
-    console.print(f"  Modules:   {len(module_ids)}")
-    console.print(f"  Classes:   {len(class_ids)}")
-    console.print(f"  Functions: {function_count}")
-    console.print(f"  Methods:   {method_count}")
+    console.print()
+    console.print("[bold cyan]Symbols[/bold cyan]")
+    console.print(f"  Modules:   [bold green]{len(module_ids)}[/bold green]")
+    console.print(f"  Classes:   [bold green]{len(class_ids)}[/bold green]")
+    console.print(f"  Functions: [bold green]{function_count}[/bold green]")
+    console.print(f"  Methods:   [bold green]{method_count}[/bold green]")
 
-    console.print("\n[bold]Relationships[/bold]")
+    console.print()
+    console.print("[bold cyan]Relationships[/bold cyan]")
     console.print(f"  contains: {edge_counts['contains']}")
     console.print(f"  inherits: {edge_counts['inherits']}")
     console.print(f"  imports:  {edge_counts['imports']}")
     console.print(f"  calls:    {edge_counts['calls']}")
 
-    console.print("\n[bold]Code[/bold]")
-    console.print(f"  Total LOC:              {total_loc}")
-    console.print(f"  Average LOC / file:     {avg_loc_per_file:.1f}")
-    console.print(f"  Average functions/module: {avg_functions_per_module:.1f}")
-    console.print(f"  Average methods/class:   {avg_methods_per_class:.1f}")
+    console.print()
+    console.print("[bold cyan]Code[/bold cyan]")
+    console.print(f"  Total LOC:                 {total_loc}")
+    console.print(f"  Average LOC / file:        {avg_loc_per_file:.1f}")
+    console.print(f"  Average functions / module: {avg_functions_per_module:.1f}")
+    console.print(f"  Average methods / class:    {avg_methods_per_class:.1f}")
 
-    console.print("\n[bold]Largest Modules[/bold] (by total symbols)")
+    console.print()
+    console.print("[bold cyan]Largest Modules[/bold cyan] [dim](by total symbols)[/dim]")
     for name, count in module_totals:
-        console.print(f"  {name:<40} {count} symbols")
+        console.print(f"  [bold green]{name:<40}[/bold green] {count} symbols")
 
-    console.print("\n[bold]Largest Classes[/bold] (by method count)")
+    console.print()
+    console.print("[bold cyan]Largest Classes[/bold cyan] [dim](by method count)[/dim]")
     for name, count in class_totals:
-        console.print(f"  {name:<40} {count} methods")
+        console.print(f"  [bold green]{name:<40}[/bold green] {count} methods")

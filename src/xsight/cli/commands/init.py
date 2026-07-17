@@ -20,7 +20,13 @@ def run(
     """Index a repository: scan, parse, build a knowledge graph, and embed it."""
     resolved_path = path.expanduser().resolve()
     if not resolved_path.is_dir():
-        console.print(f"[red]Error:[/red] '{resolved_path}' is not a directory.")
+        console.print(f"[red]✗ Error:[/red] '{resolved_path}' is not a directory.")
         raise typer.Exit(code=1)
+
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
+    console.print()
 
     run_pipeline(resolved_path, get_or_create_repository)

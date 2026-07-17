@@ -1,15 +1,9 @@
-"""`xsight doctor` command — read-only diagnostics.
-
-Never calls sync(), run_pipeline(), load_repo_graph(), embeddings, chunking,
-or the LLM. Verifies installation/repository health using only existing,
-already-established read APIs.
-"""
-
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from xsight.cli.commands._pipeline import has_repo_changed
 from xsight.config.settings import settings
@@ -22,130 +16,250 @@ from xsight.vectorstore.provider import QdrantVectorStoreProvider
 console = Console()
 
 
+def _status(ok: bool) -> str:
+    return "[green]✓[/green]" if ok else "[red]✗[/red]"
+
+
 def run(path: Path = typer.Argument(Path("."))) -> None:
     resolved_path = path.expanduser().resolve()
 
-    console.rule("[bold cyan]XSight Doctor[/bold cyan]")
-    console.print("[bold cyan]System Diagnostics[/bold cyan]")
+    console.rule(style="green")
+    console.print(
+        "[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]",
+        justify="center",
+    )
+    console.print(
+        "[white]AI Repository Assistant[/white]",
+        justify="center",
+    )
+    console.rule(style="green")
     console.print()
 
     failures = 0
     repo_indexed = False
     repo_stale = False
 
-    # 1. Configuration
+    diagnostics = Table(
+        title="[bold cyan]System Diagnostics[/bold cyan]",
+        box=None,
+        show_header=False,
+        padding=(0, 2),
+        expand=False,
+    )
+
+    diagnostics.add_column(no_wrap=True)
+    diagnostics.add_column(style="bold")
+    diagnostics.add_column()
+
+    # ------------------------------------------------------------
+    # Configuration
+    # ------------------------------------------------------------
+
     try:
         _ = settings.qdrant_url
-        console.print("[green]✓[/green] Configuration loaded")
+        diagnostics.add_row(
+            _status(True),
+            "Configuration",
+            "Loaded successfully",
+        )
     except Exception as e:
-        console.print("[red]✗[/red] Configuration failed")
-        console.print(f"  [dim]{e}[/dim]")
+        diagnostics.add_row(
+            _status(False),
+            "Configuration",
+            str(e),
+        )
         failures += 1
-    console.print()
 
-    # 2. SQLite
+    # ------------------------------------------------------------
+    # SQLite
+    # ------------------------------------------------------------
+
     conn = None
+
     try:
         conn = get_connection()
-        console.print("[green]✓[/green] SQLite database reachable")
+        diagnostics.add_row(
+            _status(True),
+            "SQLite",
+            "Database reachable",
+        )
     except Exception as e:
-        console.print("[red]✗[/red] SQLite database unavailable")
-        console.print(f"  [dim]{e}[/dim]")
+        diagnostics.add_row(
+            _status(False),
+            "SQLite",
+            str(e),
+        )
         failures += 1
-    console.print()
 
-    # 3. Qdrant
+    # ------------------------------------------------------------
+    # Qdrant
+    # ------------------------------------------------------------
+
     vector_provider = None
+
     try:
         vector_provider = QdrantVectorStoreProvider(
             collection_name=settings.qdrant_collection,
             url=settings.qdrant_url,
         )
-        vector_provider.collection_exists()
-        console.print("[green]✓[/green] Connected to Qdrant")
-    except Exception as e:
-        console.print("[red]✗[/red] Cannot connect to Qdrant")
-        console.print(f"  [dim]{e}[/dim]")
-        failures += 1
-    console.print()
 
-    # 4. Repository
+        vector_provider.collection_exists()
+
+        diagnostics.add_row(
+            _status(True),
+            "Qdrant",
+            "Connected",
+        )
+
+    except Exception as e:
+        diagnostics.add_row(
+            _status(False),
+            "Qdrant",
+            str(e),
+        )
+        failures += 1
+
+    # ------------------------------------------------------------
+    # Repository
+    # ------------------------------------------------------------
+
     repo_id = None
+
     if conn is not None:
         repo_id = get_repository(resolved_path, conn)
+
         if repo_id is None:
-            console.print("[dim]Repository is not indexed.[/dim]")
+            diagnostics.add_row(
+                "[yellow]○[/yellow]",
+                "Repository",
+                "Not indexed",
+            )
         else:
             repo_indexed = True
-            console.print("[green]✓[/green] Repository indexed")
-    console.print()
-
-    # Repository information panel (only if indexed)
-    if conn is not None and repo_id is not None:
-        row = get_repository_by_id(repo_id, conn)
-        console.print(
-            Panel(
-                f"[bold]Name[/bold] : {row['name']}\n[bold]Path[/bold] : {row['path']}",
-                title="Repository",
-                title_align="left",
-                border_style="cyan",
+            diagnostics.add_row(
+                _status(True),
+                "Repository",
+                "Indexed",
             )
-        )
-        console.print()
 
-    # 5. Repository freshness (only if indexed)
+    # ------------------------------------------------------------
+    # Freshness
+    # ------------------------------------------------------------
+
     if conn is not None and repo_id is not None:
         try:
             scan_result = scan(resolved_path)
-            index_summary_stale = has_repo_changed(repo_id, scan_result, conn)
-            if index_summary_stale:
-                console.print("[yellow]![/yellow] Repository changed since last index")
-                console.print("  [dim]Run xsight update[/dim]")
-                repo_stale = True
-            else:
-                console.print("[green]✓[/green] Repository index is up-to-date")
-        except Exception as e:
-            console.print("[red]✗[/red] Could not check repository freshness")
-            console.print(f"  [dim]{e}[/dim]")
-            failures += 1
-        console.print()
 
-    # 6. Vector store (only if indexed)
+            if has_repo_changed(repo_id, scan_result, conn):
+                repo_stale = True
+                diagnostics.add_row(
+                    "[yellow]⚠[/yellow]",
+                    "Repository",
+                    "Index is out of date",
+                )
+            else:
+                diagnostics.add_row(
+                    _status(True),
+                    "Repository",
+                    "Index is up to date",
+                )
+
+        except Exception as e:
+            diagnostics.add_row(
+                _status(False),
+                "Repository",
+                str(e),
+            )
+            failures += 1
+
+    # ------------------------------------------------------------
+    # Vector Store
+    # ------------------------------------------------------------
+
     if repo_id is not None and vector_provider is not None:
         try:
-            point_ids = list_point_ids(repo_id, vector_provider)
-            if point_ids:
-                console.print(f"[green]✓[/green] Vector store contains {len(point_ids)} embeddings")
-            else:
-                console.print("[dim]No embeddings found in the vector store.[/dim]")
+            embeddings = len(list_point_ids(repo_id, vector_provider))
+
+            diagnostics.add_row(
+                _status(True) if embeddings else "[yellow]○[/yellow]",
+                "Embeddings",
+                f"{embeddings} stored",
+            )
+
         except Exception as e:
-            console.print("[red]✗[/red] Could not query vector store")
-            console.print(f"  [dim]{e}[/dim]")
+            diagnostics.add_row(
+                _status(False),
+                "Embeddings",
+                str(e),
+            )
             failures += 1
+
+    console.print(diagnostics)
+    console.print()
+
+    # ------------------------------------------------------------
+    # Repository Information
+    # ------------------------------------------------------------
+
+    if conn is not None and repo_id is not None:
+        row = get_repository_by_id(repo_id, conn)
+
+        console.print(
+            Panel(
+                f"[bold]Name[/bold] : {row['name']}\n"
+                f"[bold]Path[/bold] : {row['path']}",
+                title="📦 Repository",
+                border_style="cyan",
+                title_align="left",
+            )
+        )
+
         console.print()
 
     if conn is not None:
         conn.close()
 
-    # Overall status — exactly four states, failures take precedence
+    # ------------------------------------------------------------
+    # Overall Status
+    # ------------------------------------------------------------
+
     if failures:
-        status_text = "Some diagnostic checks failed."
-        border_style = "red"
+        title = "✗ Overall Status"
+        border = "red"
+        message = (
+            "[red]Some diagnostic checks failed.[/red]\n\n"
+            "Resolve the reported issues and run [bold]xsight doctor[/bold] again."
+        )
+
     elif not repo_indexed:
-        status_text = "No repository is indexed here.\n\nRun xsight init <path> to begin."
-        border_style = "cyan"
+        title = "○ Overall Status"
+        border = "cyan"
+        message = (
+            "No repository is indexed here.\n\n"
+            "Run [bold]xsight init <path>[/bold] to begin."
+        )
+
     elif repo_stale:
-        status_text = "Repository index is out of date.\n\nRun xsight update."
-        border_style = "yellow"
+        title = "⚠ Overall Status"
+        border = "yellow"
+        message = (
+            "Repository index is out of date.\n\n"
+            "Run [bold]xsight update[/bold]."
+        )
+
     else:
-        status_text = "Everything looks healthy."
-        border_style = "green"
+        title = "✓ Overall Status"
+        border = "green"
+        message = (
+            "[green]Everything looks healthy.[/green]\n\n"
+            "XSight is ready."
+        )
 
     console.print(
         Panel(
-            status_text,
-            title="Overall Status",
+            message,
+            title=title,
+            border_style=border,
             title_align="left",
-            border_style=border_style,
         )
     )

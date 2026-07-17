@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Confirm
 
 from xsight.config.settings import settings
 from xsight.database.connection import get_connection
@@ -29,13 +30,17 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
 
     if repo_id is None:
         conn.close()
-        console.print("[dim]Repository is not indexed.[/dim]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         return
 
     row = get_repository_by_id(repo_id, conn)
 
-    console.rule("[bold cyan]Remove Repository[/bold cyan]")
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
     console.print()
+
     console.print(
         Panel(
             f"[bold]Name[/bold] : {row['name']}\n[bold]Path[/bold] : {row['path']}",
@@ -45,22 +50,24 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
         )
     )
     console.print()
-    console.print("[bold yellow]Warning:[/bold yellow] This action is irreversible.\n")
-    console.print("  • Repository metadata")
-    console.print("  • File metadata")
-    console.print("  • Parsed modules")
-    console.print("  • Chunks")
-    console.print("  • Embeddings")
-    console.print("  • Vector database entries")
+    console.print("[bold yellow]⚠ Warning:[/bold yellow] [yellow]This action is irreversible.[/yellow]\n")
+    console.print("The following will be permanently deleted:")
+    console.print("  [red]•[/red] Repository metadata")
+    console.print("  [red]•[/red] File metadata")
+    console.print("  [red]•[/red] Parsed modules")
+    console.print("  [red]•[/red] Chunks")
+    console.print("  [red]•[/red] Embeddings")
+    console.print("  [red]•[/red] Vector database entries")
     console.print()
 
-    confirmed = typer.confirm(
-        "Remove this repository from XSight?",
+    confirmed = Confirm.ask(
+        "[bold red]Remove this repository from XSight?[/bold red]",
         default=False,
     )
+
     if not confirmed:
+        console.print("[yellow]● Cancelled. No changes were made.[/yellow]")
         conn.close()
-        console.print("[dim]Cancelled.[/dim]")
         return
 
     console.print()
@@ -69,15 +76,22 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
         url=settings.qdrant_url,
     )
 
-    console.print("[dim]Removing vector entries...[/dim]")
     point_ids = list_point_ids(repo_id, vector_provider)
     delete(list(point_ids), vector_provider)
+    console.print("[green]✓[/green] Vector entries removed")
 
-    console.print("[dim]Removing repository metadata...[/dim]")
     delete_repository(repo_id, conn)
     conn.commit()
     conn.close()
+    console.print("[green]✓[/green] Repository metadata removed")
 
     console.print()
-    console.print("[bold green]✓[/bold green] Repository removed successfully.")
-    console.print("[dim]XSight no longer tracks this repository.[/dim]")
+    console.print(
+        Panel(
+            "[green]Repository removed successfully.[/green]\n"
+            "XSight no longer tracks this repository.",
+            title="✓ Done",
+            title_align="left",
+            border_style="green",
+        )
+    )

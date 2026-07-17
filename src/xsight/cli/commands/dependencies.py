@@ -48,17 +48,15 @@ def run(
     repo_id = get_repository(resolved_path, conn)
     if repo_id is None:
         conn.close()
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         raise typer.Exit(code=1)
 
     scan_result = scan(resolved_path)
 
     if has_repo_changed(repo_id, scan_result, conn):
         conn.close()
-        console.print(
-            "[yellow]Repository has changed since the last index.[/yellow]\n"
-            "Run [bold]xsight update[/bold] first, then retry."
-        )
+        console.print("[yellow]⚠ Repository has changed since the last index. [/yellow] ")
+        console.print("[yellow]Run [bold]xsight update[/bold] first, then retry.[/yellow]")
         raise typer.Exit(code=1)
 
     python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
@@ -73,8 +71,13 @@ def run(
     if module is None:
         module_ids = sorted(n for n, d in graph.nodes(data=True) if d.get("kind") == "module")
 
-        table = Table(title=f"Dependencies — {resolved_path}")
-        table.add_column("Module")
+        console.print()
+        console.print(f"[bold cyan]Dependencies [/bold cyan]  [white bold]{resolved_path}[/white bold]")
+        console.print("[cyan]" + "─" * 60 + "[/cyan]")
+        console.print()
+
+        table = Table(box=None, show_header=True, header_style="bold cyan", padding=(0, 2), expand=False)
+        table.add_column("Module", style="bold green", no_wrap=True)
         table.add_column("Imports", justify="right")
         table.add_column("Imported By", justify="right")
 
@@ -84,27 +87,33 @@ def run(
             table.add_row(display_path, str(len(imports)), str(len(imported_by)))
 
         console.print(table)
+        console.print()
+        console.print(f"[green]✓[/green] {len(module_ids)} modules")
+        console.print()
         return
 
     if module not in graph.nodes or graph.nodes[module].get("kind") != "module":
-        console.print(f"[red]Error:[/red] '{module}' is not a known module in this repository.")
+        console.print(f"[red]✗[/red] '{module}' is not a known module in this repository.")
         raise typer.Exit(code=1)
 
     imports, imported_by = _import_neighbors(graph, module)
 
-    console.print(f"[bold]Module:[/bold] {module}\n")
-    console.print("[bold]Imports[/bold]")
-    console.print("-" * 8)
+    console.print(f"[bold cyan]Module[/bold cyan]  [bold green]{module}[/bold green]")
+    console.print()
+
+    console.print("[bold cyan]Imports[/bold cyan]")
+    console.print("[cyan]" + "─" * 30 + "[/cyan]")
     if imports:
         for m in imports:
-            console.print(f"  {m}")
+            console.print(f"  [green]→[/green] {m}")
     else:
-        console.print("  (none)")
+        console.print("  [yellow]○[/yellow] none")
 
-    console.print("\n[bold]Imported By[/bold]")
-    console.print("-" * 12)
+    console.print()
+    console.print("[bold cyan]Imported By[/bold cyan]")
+    console.print("[cyan]" + "─" * 30 + "[/cyan]")
     if imported_by:
         for m in imported_by:
-            console.print(f"  {m}")
+            console.print(f"  [green]←[/green] {m}")
     else:
-        console.print("  (none)")
+        console.print("  [yellow]○[/yellow] none")

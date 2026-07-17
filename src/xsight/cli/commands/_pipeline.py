@@ -143,20 +143,21 @@ def run_pipeline(resolved_path: Path, resolve_repo_id: ResolveRepoId) -> None:
 
 
 def _render_summary(repo_path: Path, scan_summary, index_summary, chunk_count: int) -> None:
-    console.print(f"\n[bold green]Indexed[/bold green] {repo_path}")
+    console.print()
+    console.print(f"[bold green]✓ Indexed[/bold green] [bold]{repo_path}[/bold]")
     console.print(
-        f"  files: {index_summary.total_files} total "
+        f"  Files: {index_summary.total_files} total "
         f"([green]+{index_summary.added}[/green] "
         f"[yellow]~{index_summary.updated}[/yellow] "
         f"[red]-{index_summary.removed}[/red] "
         f"={index_summary.unchanged})"
     )
     console.print(
-        f"  skipped: {scan_summary.ignored_files} ignored files, "
+        f"  Skipped: {scan_summary.ignored_files} ignored, "
         f"{scan_summary.ignored_directories} ignored dirs, "
         f"{scan_summary.skipped_binary_files} binary, "
         f"{scan_summary.skipped_large_files} too large"
     )
     if scan_summary.errors:
-        console.print(f"  [red]{scan_summary.errors} files skipped due to errors[/red]")
-    console.print(f"  chunks embedded: {chunk_count}")
+        console.print(f"  [red]⚠ {scan_summary.errors} files skipped due to errors[/red]")
+    console.print(f"  Chunks embedded: {chunk_count}")

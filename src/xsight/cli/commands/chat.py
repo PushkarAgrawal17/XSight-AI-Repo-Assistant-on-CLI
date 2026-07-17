@@ -5,7 +5,11 @@ from typing import Callable
 
 import typer
 from google.genai import errors as genai_errors
+from prompt_toolkit import prompt
+from prompt_toolkit.styles import Style
 from rich.console import Console
+from rich.prompt import Prompt
+from rich.markdown import Markdown
 
 from xsight.chat.core import NoResultsError, answer_question
 from xsight.chat.models import ChatTurn
@@ -33,8 +37,14 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
 
     if repo_id is None:
         conn.close()
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         raise typer.Exit(1)
+
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[bold white]AI Repository Assistant[/bold white]", justify="center")
+    console.rule(style="green")
+    console.print()
 
     scan_result = scan(resolved_path)
     index_summary = sync(repo_id, scan_result.snapshot, conn)
@@ -44,8 +54,12 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
     )
 
     if changed:
-        console.print("[yellow]Repository has changed since the last index.[/yellow]")
-        if typer.confirm("Run `xsight update` now?", default=True):
+        console.print("[yellow]⚠ Repository has changed since the last index. [/yellow] ")
+        confirmed = Prompt.ask(
+            "Run [yellow]`xsight update`[/yellow] now? [violet bold](y/n)[/violet bold]"
+        ).strip().lower()
+
+        if confirmed not in ("n", "no"):
             conn.close()
             run_pipeline(resolved_path, lambda p, c: get_repository(p, c))
             scan_result = scan(resolved_path)  # fresh snapshot post-update
@@ -53,6 +67,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
             index_summary = sync(repo_id, scan_result.snapshot, conn)
             conn.commit()
 
+    console.print()
     python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
     graph = load_repo_graph(resolved_path, repo_id, python_files, index_summary, conn)
     conn.close()
@@ -68,7 +83,7 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
     )
 
     if settings.gemini_api_key is None:
-        console.print("[red]Error:[/red] GEMINI_API_KEY is not configured.")
+        console.print("[red]✗ Error:[/red] GEMINI_API_KEY is not configured.")
         raise typer.Exit(code=1)
 
     llm_provider = GeminiLLMProvider(
@@ -79,40 +94,37 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
     history: list[ChatTurn] = []
 
     def cmd_help() -> None:
-        console.print(
-            "[bold]Available commands:[/bold]\n"
-            "  help     Show this help message\n"
-            "  history  Show the current conversation history\n"
-            "  clear    Clear conversation history\n"
-            "  stats    Show session information\n"
-            "  exit     Leave the chat session\n"
-            "  quit     Leave the chat session"
-        )
+        console.print("[bold cyan]Available Commands[/bold cyan]")
+        console.print("[cyan]" + "─" * 40 + "[/cyan]")
+        console.print("  [bold green]help[/bold green]     Show this help message")
+        console.print("  [bold green]history[/bold green]  Show the current conversation history")
+        console.print("  [bold green]clear[/bold green]    Clear conversation history")
+        console.print("  [bold green]stats[/bold green]    Show session information")
+        console.print("  [bold green]exit[/bold green]     Leave the chat session")
+        console.print("  [bold green]quit[/bold green]     Leave the chat session")
 
     def _preview(text: str) -> str:
         return text if len(text) <= 200 else text[:200] + "..."
 
     def cmd_history() -> None:
         if not history:
-            console.print("[dim](no conversation history yet)[/dim]")
+            console.print("[yellow]○[/yellow] No conversation history yet.")
             return
         for i, turn in enumerate(history, start=1):
-            console.print(f"[bold]{i}. User:[/bold] {turn.question}")
-            console.print(f"   [bold]Assistant:[/bold] {_preview(turn.answer)}")
+            console.print(f"[bold cyan]{i}. User:[/bold cyan] {turn.question}")
+            console.print(f"   [bold green]Assistant:[/bold green] {_preview(turn.answer)}")
 
     def cmd_clear() -> None:
         history.clear()
-        console.print("[dim]Conversation history cleared.[/dim]")
+        console.print("[green]✓[/green] Conversation history cleared.")
 
     def cmd_stats() -> None:
-        console.print(
-            f"[bold]Repository:[/bold] {resolved_path}\n"
-            f"[bold]Repo ID:[/bold] {repo_id}\n"
-            f"[bold]Conversation turns:[/bold] {len(history)}\n"
-            f"[bold]History window:[/bold] {HISTORY_WINDOW}\n"
-            f"[bold]Graph nodes:[/bold] {graph.number_of_nodes()}\n"
-            f"[bold]Graph edges:[/bold] {graph.number_of_edges()}"
-        )
+        console.print(f"[bold cyan]Repository[/bold cyan]      : {resolved_path}")
+        console.print(f"[bold cyan]Repo ID[/bold cyan]         : {repo_id}")
+        console.print(f"[bold cyan]Conversation turns[/bold cyan] : {len(history)}")
+        console.print(f"[bold cyan]History window[/bold cyan]  : {HISTORY_WINDOW}")
+        console.print(f"[bold cyan]Graph nodes[/bold cyan]     : [bold green]{graph.number_of_nodes()}[/bold green]")
+        console.print(f"[bold cyan]Graph edges[/bold cyan]     : [bold green]{graph.number_of_edges()}[/bold green]")
 
     commands: dict[str, Callable[[], None]] = {
         "help": cmd_help,
@@ -135,18 +147,13 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
                 repo_summary=repo_summary,
             )
         except NoResultsError:
-            console.print(
-                "[yellow]No indexed code was found for this repository. "
-                "Run `xsight init` again.[/yellow]"
-            )
+            console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
             return
         except genai_errors.APIError as e:
-            console.print(
-                f"[red]Gemini API error ({e.code}): {e.message}[/red]\n"
-                "[red]Check your GEMINI_API_KEY and network connection.[/red]"
-            )
+            console.print(f"[red bold]✗ Gemini API error ({e.code}) [/red bold]: {e.message}")
+            console.print("[red]Check your GEMINI_API_KEY and network connection.[/red]")
             return
-        console.print(answer)
+        console.print(Markdown(answer))
         history.append(ChatTurn(question=q, answer=answer))
         del history[:-HISTORY_WINDOW]
 
@@ -154,10 +161,24 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
         ask(query)
         return
 
-    console.print("[dim]XSight chat -- type 'exit' or 'quit' to leave.[/dim]")
+    console.print("\n[cyan]Type [bold]'exit'[/bold] or [bold]'quit'[/bold]' to leave.[/cyan]")
+
+    style = Style.from_dict(
+        {
+            "prompt": "bold cyan",
+            "": "bold ansigreen",
+        }
+    )
+
     while True:
         try:
-            user_input = console.input("[bold]> [/bold]").strip()
+            user_input = prompt(
+                [("class:prompt", "> ")],
+                style=Style.from_dict({
+                    "prompt": "bold cyan",
+                    "": "bold ansigreen",
+                })
+            ).strip()
         except (EOFError, KeyboardInterrupt):
             console.print()
             break

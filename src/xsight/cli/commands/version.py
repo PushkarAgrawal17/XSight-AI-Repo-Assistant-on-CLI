@@ -26,19 +26,19 @@ def _xsight_version() -> str:
 def _install_path() -> str:
     try:
         from importlib.util import find_spec
-
-        def _install_path() -> str:
-            spec = find_spec("xsight")
-            if spec is None or spec.origin is None:
-                return "unknown"
-            return str(Path(spec.origin).resolve().parent)
-
+        spec = find_spec("xsight")
+        if spec is None or spec.origin is None:
+            return "unknown"
+        return str(Path(spec.origin).resolve().parent)
     except Exception:
         return "unknown"
 
 
 def run() -> None:
-    console.rule("[bold cyan]XSight Version[/bold cyan]")
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
     console.print()
 
     console.print(
@@ -47,7 +47,7 @@ def run() -> None:
             f"[bold]Python[/bold]       : {platform.python_version()}\n"
             f"[bold]Platform[/bold]     : {platform.platform()}\n"
             f"[bold]Install Path[/bold] : {_install_path()}",
-            title="XSight",
+            title="[bold cyan]System Info[/bold cyan]",
             title_align="left",
             border_style="cyan",
         )

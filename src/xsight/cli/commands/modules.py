@@ -53,25 +53,29 @@ def _module_stats(graph, module_id: str) -> tuple[int, int, int, int]:
 def run(path: Path = typer.Argument(Path("."))) -> None:
     resolved_path = path.expanduser().resolve()
     if not resolved_path.is_dir():
-        console.print(f"[red]Error:[/red] '{resolved_path}' is not a directory.")
+        console.print(f"[red]✗[/red] '{resolved_path}' is not a directory.")
         raise typer.Exit(code=1)
 
     conn = get_connection()
     repo_id = get_repository(resolved_path, conn)
     if repo_id is None:
         conn.close()
-        console.print("[red]Repository hasn't been indexed. Run `xsight init` first.[/red]")
+        console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
         raise typer.Exit(code=1)
 
     scan_result = scan(resolved_path)
 
     if has_repo_changed(repo_id, scan_result, conn):
         conn.close()
-        console.print(
-            "[yellow]Repository has changed since the last index.[/yellow]\n"
-            "Run [bold]xsight update[/bold] first, then retry."
-        )
+        console.print("[yellow]⚠ Repository has changed since the last index. [/yellow] ")
+        console.print("[yellow]Run [bold]xsight update[/bold] first, then retry.[/yellow]")
         raise typer.Exit(code=1)
+
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
+    console.print()
 
     python_files = [f for f in scan_result.snapshot.files if f.language == "python"]
     unchanged_summary = IndexSummary(
@@ -84,8 +88,13 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
 
     module_ids = sorted(n for n, d in graph.nodes(data=True) if d.get("kind") == "module")
 
-    table = Table(title=f"Modules — {resolved_path}")
-    table.add_column("Module")
+    console.print()
+    console.print(f"[bold cyan]Modules —[/bold cyan]  [white]{resolved_path}[/white]")
+    console.print("[cyan]" + "─" * 55 + "[/cyan]")
+    console.print()
+
+    table = Table(box=None, show_header=True, header_style="bold cyan", padding=(0, 2), expand=False)
+    table.add_column("Module", style="bold green", no_wrap=True)
     table.add_column("Classes", justify="right")
     table.add_column("Functions", justify="right")
     table.add_column("Imports", justify="right")
@@ -97,3 +106,6 @@ def run(path: Path = typer.Argument(Path("."))) -> None:
         table.add_row(display_path, str(classes), str(functions), str(imports_out), str(imports_in))
 
     console.print(table)
+    console.print()
+    console.print(f"[green]✓[/green] {len(module_ids)} modules")
+    console.print()

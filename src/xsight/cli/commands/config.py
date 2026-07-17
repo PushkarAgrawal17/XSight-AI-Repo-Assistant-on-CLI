@@ -64,8 +64,13 @@ def _display(field_name: str, value) -> str:
 
 
 def run() -> None:
-    console.rule("[bold cyan]XSight Configuration[/bold cyan]")
-    console.print("[bold cyan]Current Runtime Configuration[/bold cyan]")
+    console.rule(style="green")
+    console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
+    console.print("[white]AI Repository Assistant[/white]", justify="center")
+    console.rule(style="green")
+    console.print()
+    console.print("[bold cyan]Runtime Configuration[/bold cyan]")
+    console.print("[cyan]" + "─" * 55 + "[/cyan]")
     console.print()
 
     fields = settings.model_dump()

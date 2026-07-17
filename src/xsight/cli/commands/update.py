@@ -21,16 +21,13 @@ def run(
     """Re-index an already-initialized repository incrementally."""
     resolved_path = path.expanduser().resolve()
     if not resolved_path.is_dir():
-        console.print(f"[red]Error:[/red] '{resolved_path}' is not a directory.")
+        console.print(f"[red bold]✗ Error:[/red bold] '{resolved_path}' is not a directory.")
         raise typer.Exit(code=1)
 
     def require_existing(p: Path, conn: sqlite3.Connection) -> int:
         repo_id = get_repository(p, conn)
         if repo_id is None:
-            console.print(
-                f"[red]Error:[/red] '{p}' has not been indexed yet.\n"
-                "  Run [bold]xsight init[/bold] first."
-            )
+            console.print("[red]Repository hasn't been indexed. Run [bold]`xsight init`[/bold] first.[/red]")
             raise typer.Exit(code=1)
         return repo_id
 
