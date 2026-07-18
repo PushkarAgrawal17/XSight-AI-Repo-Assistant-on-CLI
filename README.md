@@ -39,18 +39,13 @@ It is a CLI tool, not a chatbot bolted onto file search.
 </p>
 
 <p align="center">
-  <img src="screenshots/architecture.png" height="1140" alt="xsight architecture"><br>
-  <sub><b>High-level structural overview of the repository</b></sub>
-</p>
-
-<p align="center">
   <img src="screenshots/stats.png" height="1140" alt="xsight stats"><br>
   <sub><b>Repository statistics dashboard</b></sub>
 </p>
 
 <p align="center">
   <img src="screenshots/graph-architecture.png" height="1140" alt="xsight graph"><br>
-  <sub><b>Raw knowledge graph inspection</b></sub>
+  <sub><b>Raw knowledge graph inspection and High-level structural overview of the repository</b></sub>
 </p>
 
 <p align="center">
