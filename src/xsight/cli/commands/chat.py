@@ -44,7 +44,6 @@ def run(query: str | None = typer.Argument(None), path: Path = typer.Argument(Pa
     console.print("[bold cyan]XSight[/bold cyan] [dim]v0.1.0[/dim]", justify="center")
     console.print("[bold white]AI Repository Assistant[/bold white]", justify="center")
     console.rule(style="green")
-    console.print()
 
     scan_result = scan(resolved_path)
     index_summary = sync(repo_id, scan_result.snapshot, conn)
